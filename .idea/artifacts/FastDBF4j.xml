@@ -1,0 +1,8 @@
+<component name="ArtifactManager">
+  <artifact type="jar" build-on-make="true" name="FastDBF4j">
+    <output-path>$PROJECT_DIR$/out/artifacts/FastDBF4j</output-path>
+    <root id="archive" name="FastDBF4j.jar">
+      <element id="module-output" name="FastDBF4j" />
+    </root>
+  </artifact>
+</component>

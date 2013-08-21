@@ -1,0 +1,11 @@
+*.class
+
+# Package Files #
+*.war
+*.ear
+
+out/
+*/target/*
+workspace.xml
+tasks.xml
+*.iws
