@@ -1,6 +1,6 @@
 package com.socialexplorer.fastDBF4j;
 
-import com.socialexplorer.util.RandomAccessFileWithLittleEndian;
+import com.socialexplorer.util.FileReader;
 
 import java.io.*;
 
@@ -24,7 +24,7 @@ public class DbfFile {
     /**
      * input and output stream
      */
-    protected RandomAccessFileWithLittleEndian _dbfFile = null;
+    protected FileReader _dbfFile = null;
 
     /**
      * Path to the file, if the file was opened at all.
@@ -66,7 +66,7 @@ public class DbfFile {
         _isForwardOnly = false; // RandomAccessFile can seek
         _isReadOnly = (_fileAccess.equals("r"));
 
-        _dbfFile = new RandomAccessFileWithLittleEndian(sPath, fileAccess);
+        _dbfFile = new com.socialexplorer.util.FileReader(new RandomAccessFile(sPath, fileAccess));
 
         // read the header
         if (_fileAccess.contains("r")) {

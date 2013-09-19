@@ -1,7 +1,7 @@
 package com.socialexplorer.fastDBF4j;
 
-import com.socialexplorer.util.ByteUtils;
-import com.socialexplorer.util.RandomAccessFileWithLittleEndian;
+import com.socialexplorer.util.*;
+import com.socialexplorer.util.FileReader;
 
 import java.io.*;
 //import java.text.DateFormat;
@@ -207,8 +207,10 @@ public class DbfRecord {
             else if (columnType == DbfColumn.DbfColumnType.INTEGER) {
                 // NOTE: INTEGER types are written as BINARY 4-byte LITTLE endian integers
 
-                byte[] valueBytes = ByteUtils.int2byte(Integer.parseInt(value));
-                ByteUtils.reverseBytes(valueBytes); // to get little endian
+                int intValue = Integer.parseInt(value);
+                intValue = ByteUtils.swap(intValue); // to get little endian
+
+                byte[] valueBytes = ByteUtils.int2byte(intValue);
                 System.arraycopy(valueBytes, 0, _data, column.getDataAddress(), 4);
 
             }
@@ -282,9 +284,8 @@ public class DbfRecord {
         if (column.getColumnType() == DbfColumn.DbfColumnType.INTEGER) {
             byte[] intBytes = new byte[4];
             System.arraycopy(_data, column.getDataAddress(), intBytes, 0, 4);
-            ByteUtils.reverseBytes(intBytes); // to get big endian
 
-            val = Integer.toString(ByteUtils.byte2int(intBytes));
+            val = Integer.toString(ByteUtils.swap(ByteUtils.byte2int(intBytes)));  // swap to get big endian
         } else {
             val = new String(_data, column.getDataAddress(), column.getLength(), "US-ASCII");
         }
@@ -474,7 +475,7 @@ public class DbfRecord {
      * @param dbfFile
      * @throws Exception
      */
-    protected void write(RandomAccessFileWithLittleEndian dbfFile) throws Exception {
+    protected void write(FileReader dbfFile) throws Exception {
         dbfFile.write(_data, 0, _data.length);
     }
 
@@ -484,7 +485,7 @@ public class DbfRecord {
      * @param clearRecordAfterWrite
      * @throws Exception
      */
-    protected void write(RandomAccessFileWithLittleEndian dbfFile, boolean clearRecordAfterWrite) throws Exception {
+    protected void write(FileReader dbfFile, boolean clearRecordAfterWrite) throws Exception {
         dbfFile.write(_data, 0, _data.length);
 
         if (clearRecordAfterWrite) {
@@ -498,14 +499,14 @@ public class DbfRecord {
      * @return true if record was read, false otherwise (there is no more data in the stream)
      * @throws Exception
      */
-    protected boolean read(RandomAccessFileWithLittleEndian dbfFile) throws Exception {
+    protected boolean read(FileReader dbfFile) throws Exception {
         if(dbfFile.read(_data, 0, _data.length) < _data.length) {
             return false;
         }
         return true;
     }
 
-    protected String readValue(RandomAccessFileWithLittleEndian dbfFile, int columnIndex) throws UnsupportedEncodingException {
+    protected String readValue(com.socialexplorer.util.FileReader dbfFile, int columnIndex) throws UnsupportedEncodingException {
         DbfColumn column = _header.get(columnIndex);
         return new String(_data, column.getDataAddress(), column.getLength(), "US-ASCII");
     }

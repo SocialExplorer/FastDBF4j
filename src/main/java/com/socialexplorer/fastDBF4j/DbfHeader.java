@@ -1,7 +1,7 @@
 package com.socialexplorer.fastDBF4j;
 
-import com.socialexplorer.util.ByteUtils;
-import com.socialexplorer.util.RandomAccessFileWithLittleEndian;
+import com.socialexplorer.util.*;
+import com.socialexplorer.util.FileReader;
 
 import java.io.*;
 import java.text.SimpleDateFormat;
@@ -454,7 +454,7 @@ public class DbfHeader implements Cloneable {
      * @param dbfFile
      * @throws Exception
      */
-    public void write(RandomAccessFileWithLittleEndian dbfFile) throws Exception
+    public void write(FileReader dbfFile) throws Exception
     {
 
         // write the header
@@ -538,7 +538,7 @@ public class DbfHeader implements Cloneable {
      * @throws IOException
      * @throws Exception
      */
-    public void read(RandomAccessFileWithLittleEndian dbfFile) throws IOException, Exception {
+    public void read(com.socialexplorer.util.FileReader dbfFile) throws IOException, Exception {
         try {
             // type of reader.
             int nFileType = dbfFile.readByte();
