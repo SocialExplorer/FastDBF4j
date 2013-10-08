@@ -5,7 +5,7 @@
     <modelVersion>4.0.0</modelVersion>
 
     <groupId>com.socialexplorer</groupId>
-    <artifactId>fastDBF4j</artifactId>
+    <artifactId>fastdbf4j</artifactId>
     <version>1.0.0</version>
 
     <build>
