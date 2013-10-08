@@ -6,5 +6,19 @@
 
     <groupId>com.socialexplorer</groupId>
     <artifactId>fastDBF4j</artifactId>
-    <version>1.0</version>
+    <version>1.0.0</version>
+
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-jar-plugin</artifactId>
+                <version>2.4</version>
+                <configuration>
+                    <outputDirectory>maven-repo/com/socialexplorer/fastdbf4j/1.0.0</outputDirectory>
+                </configuration>
+            </plugin>
+        </plugins>
+    </build>
+
 </project>
