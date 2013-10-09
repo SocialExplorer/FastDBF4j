@@ -16,7 +16,8 @@
                 <artifactId>maven-jar-plugin</artifactId>
                 <version>2.4</version>
                 <configuration>
-                    <outputDirectory>maven-repo/com/socialexplorer/${artifactId}/${version}</outputDirectory>
+                    <outputDirectory>maven-repo/com/socialexplorer/${project.artifactId}/${project.version}
+                    </outputDirectory>
                 </configuration>
             </plugin>
 
@@ -26,6 +27,36 @@
                 <version>2.3.1</version>
                 <configuration>
                     <createChecksum>true</createChecksum>
+                </configuration>
+            </plugin>
+
+            <!-- Line ending fix: CR LF -> LF (unix style) -->
+            <plugin>
+                <groupId>com.google.code.maven-replacer-plugin</groupId>
+                <artifactId>replacer</artifactId>
+                <version>1.5.2</version>
+                <executions>
+                    <execution>
+                        <phase>prepare-package</phase>
+                        <goals>
+                            <goal>replace</goal>
+                        </goals>
+                    </execution>
+                </executions>
+                <configuration>
+                    <includes>
+                        <include>
+                            maven-repo/com/socialexplorer/${project.artifactId}/${project.version}/${project.artifactId}-${project.version}.pom
+                        </include>
+                        <include>maven-repo/com/socialexplorer/${project.artifactId}/maven-metadata-local.xml</include>
+                    </includes>
+
+                    <replacements>
+                        <replacement>
+                            <token>\r</token>
+                            <value></value>
+                        </replacement>
+                    </replacements>
                 </configuration>
             </plugin>
 
@@ -46,17 +77,18 @@
                     <fileSets>
                         <!-- Create checksums for maven-metadata-local.xml -->
                         <fileSet>
-                            <directory>maven-repo/com/socialexplorer/${artifactId}</directory>
+                            <directory>maven-repo/com/socialexplorer/${project.artifactId}</directory>
                             <includes>
                                 <include>maven-metadata-local.xml</include>
                             </includes>
                         </fileSet>
                         <!-- Create checksums for fastdbf4j artifact's pom and jar -->
                         <fileSet>
-                            <directory>maven-repo/com/socialexplorer/${artifactId}/${version}</directory>
+                            <directory>maven-repo/com/socialexplorer/${project.artifactId}/${project.version}
+                            </directory>
                             <includes>
-                                <include>${artifactId}-${version}.jar</include>
-                                <include>${artifactId}-${version}.pom</include>
+                                <include>${project.artifactId}-${project.version}.jar</include>
+                                <include>${project.artifactId}-${project.version}.pom</include>
                             </includes>
                         </fileSet>
                     </fileSets>
