@@ -510,4 +510,13 @@ public class DbfRecord {
         DbfColumn column = _header.get(columnIndex);
         return new String(_data, column.getDataAddress(), column.getLength(), "US-ASCII");
     }
+
+    public void setData(byte[] data) {
+        this._data = data;
+    }
+
+    public void setHeader(DbfHeader header) {
+        this._header = header;
+    }
+
 }
