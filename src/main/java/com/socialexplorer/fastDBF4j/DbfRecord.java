@@ -17,6 +17,8 @@ import java.util.Date;
  * Once you create a record the header can no longer be modified, since modifying the header would make a corrupt DBF file.
  */
 public class DbfRecord {
+    private static final String CHARSET_NAME = "ISO-8859-1";
+
     /***
      * Header provides information on all field types, sizes, precision and other useful information about the DBF.
      */
@@ -119,7 +121,7 @@ public class DbfRecord {
                 System.arraycopy(_emptyRecord, column.getDataAddress(), _data, column.getDataAddress(), column.getLength());
 
                 int length = value.length() > column.getLength() ? column.getLength() : value.length();
-                byte[] valueBytes = value.substring(0, length).getBytes("US-ASCII");
+                byte[] valueBytes = value.substring(0, length).getBytes(CHARSET_NAME);
 
                 System.arraycopy(valueBytes, 0, _data, column.getDataAddress(), valueBytes.length);
             }
@@ -147,7 +149,7 @@ public class DbfRecord {
                     //set integer part, CAREFUL not to overflow buffer! (truncate instead)
                     //-----------------------------------------------------------------------
                     int nNumLen = value.length() > column.getLength() ? column.getLength() : value.length();
-                    byte[] valueBytes = value.substring(0, nNumLen).getBytes("US-ASCII");
+                    byte[] valueBytes = value.substring(0, nNumLen).getBytes(CHARSET_NAME);
 
                     System.arraycopy(valueBytes, 0, _data, (column.getDataAddress() + column.getLength() - nNumLen), valueBytes.length);
                     //ASCIIEncoder.GetBytes(value, 0, nNumLen, _data, (ocol.getDataAddress() + ocol.Length() - nNumLen));
@@ -184,14 +186,14 @@ public class DbfRecord {
                     //set decimal numbers, CAREFUL not to overflow buffer! (truncate instead)
                     if (indexDecimal > -1) {
                         int decimalLength = cDec.length > column.getDecimalCount() ? column.getDecimalCount() : cDec.length;
-                        byte[] valueBytes = value.substring(value.indexOf('.') + 1, value.indexOf('.') + decimalLength + 1).getBytes("US-ASCII");
+                        byte[] valueBytes = value.substring(value.indexOf('.') + 1, value.indexOf('.') + decimalLength + 1).getBytes(CHARSET_NAME);
                         System.arraycopy(valueBytes, 0, _data, (column.getDataAddress() + column.getLength() - column.getDecimalCount()), valueBytes.length);
                     }
 
                     //set integer part, CAREFUL not to overflow buffer! (truncate instead)
                     //-----------------------------------------------------------------------
                     int nNumLen = cNum.length > column.getLength() - column.getDecimalCount() - 1 ? (column.getLength() - column.getDecimalCount() - 1) : cNum.length;
-                    byte[] valueBytes = value.substring(0, nNumLen).getBytes("US-ASCII");
+                    byte[] valueBytes = value.substring(0, nNumLen).getBytes(CHARSET_NAME);
                     System.arraycopy(valueBytes, 0, _data, (column.getDataAddress() + column.getLength() - column.getDecimalCount() - nNumLen - 1), valueBytes.length);
 
                     //set decimal point
@@ -303,7 +305,7 @@ public class DbfRecord {
         DbfColumn ocol = _header.get(nColIndex);
 
         if (ocol.getColumnType() == DbfColumn.DbfColumnType.DATE) {
-            String sDateVal = new String(_data, ocol.getDataAddress(), ocol.getLength(), "US-ASCII"); //ASCIIEncoder.GetString(_data, ocol.getDataAddress(), ocol.Length());
+            String sDateVal = new String(_data, ocol.getDataAddress(), ocol.getLength(), CHARSET_NAME); //ASCIIEncoder.GetString(_data, ocol.getDataAddress(), ocol.Length());
             SimpleDateFormat format = new SimpleDateFormat("yyyyMMdd");
             return format.parse(sDateVal);
             //return DateTime.ParseExact(sDateVal, "yyyyMMdd", CultureInfo.InvariantCulture);
@@ -327,7 +329,7 @@ public class DbfRecord {
         if (columnType == DbfColumn.DbfColumnType.DATE) {
             // Format date and set value. Date format is: yyyyMMdd
             String formattedValue = (new SimpleDateFormat("yyyyMMdd")).format(value);
-            byte[] bytes = formattedValue.substring(0, column.getLength()).getBytes("US-ASCII");
+            byte[] bytes = formattedValue.substring(0, column.getLength()).getBytes(CHARSET_NAME);
 
             System.arraycopy(bytes, 0, _data, column.getDataAddress(), bytes.length);
             //ASCIIEncoder.GetBytes(value.toString("yyyyMMdd"), 0, ocol.Length(), _data, ocol.getDataAddress());
@@ -351,7 +353,7 @@ public class DbfRecord {
      * @return
      */
     public String ToString() throws UnsupportedEncodingException {
-        return new String(_data, "US-ASCII");
+        return new String(_data, CHARSET_NAME);
     }
 
     /***
@@ -508,7 +510,7 @@ public class DbfRecord {
 
     protected String readValue(com.socialexplorer.util.FileReader dbfFile, int columnIndex) throws UnsupportedEncodingException {
         DbfColumn column = _header.get(columnIndex);
-        return new String(_data, column.getDataAddress(), column.getLength(), "US-ASCII");
+        return new String(_data, column.getDataAddress(), column.getLength(), CHARSET_NAME);
     }
 
     public void setData(byte[] data) {

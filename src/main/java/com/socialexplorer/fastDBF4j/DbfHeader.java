@@ -103,6 +103,8 @@ import java.util.*;
  */
 
 public class DbfHeader implements Cloneable {
+    private static final String CHARSET_NAME = "ISO-8859-1";
+
     /***
      * Header file descriptor size is 33 bytes (32 bytes + 1 terminator byte), followed by column metadata which is 32 bytes each.
      */
@@ -363,7 +365,7 @@ public class DbfHeader implements Cloneable {
         if (_emptyRecord == null) {
             //initialize array for clearing data quickly
             String value = String.format("%1$" + (int) _recordLength + "s", " ");
-            _emptyRecord = value.getBytes("US-ASCII");
+            _emptyRecord = value.getBytes(CHARSET_NAME);
 
             //_emptyRecord = Encoding.ASCII.GetBytes("".PadLeft((int) _recordLength, ' ').ToCharArray());
         }

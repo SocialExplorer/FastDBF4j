@@ -23,6 +23,7 @@
         <outputRelativeToContentRoot value="true" />
         <processorPath useClasspath="true" />
         <module name="FastDBF4j" />
+        <module name="fastdbf4j" />
       </profile>
     </annotationProcessing>
   </component>

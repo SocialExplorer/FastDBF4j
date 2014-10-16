@@ -11,6 +11,8 @@ import java.io.*;
  * We don't rely on that byte at all, and everything works with or without that byte, but it should be there by spec.
  */
 public class DbfFile {
+    private static final String CHARSET_NAME = "ISO-8859-1";
+
     /**
      * Helps read/write dbf file header information.
      */
@@ -294,7 +296,7 @@ public class DbfFile {
         byte[] data = new byte[column.getLength()];
         _dbfFile.read(data, 0, column.getLength());
 
-        result.append(new String(data, 0, column.getLength(), "US-ASCII"));
+        result.append(new String(data, 0, column.getLength(), CHARSET_NAME));
 
         return true;
     }
