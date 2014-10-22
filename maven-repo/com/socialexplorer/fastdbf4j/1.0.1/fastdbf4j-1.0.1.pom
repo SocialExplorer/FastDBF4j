@@ -1,0 +1,104 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <groupId>com.socialexplorer</groupId>
+    <artifactId>fastdbf4j</artifactId>
+    <version>1.0.1</version>
+
+    <build>
+        <plugins>
+            <!-- Copy jar into the maven-repo folder -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-jar-plugin</artifactId>
+                <version>2.4</version>
+                <configuration>
+                    <outputDirectory>maven-repo/com/socialexplorer/${project.artifactId}/${project.version}
+                    </outputDirectory>
+                </configuration>
+            </plugin>
+
+            <!-- Create checksums -->
+            <plugin>
+                <artifactId>maven-install-plugin</artifactId>
+                <version>2.3.1</version>
+                <configuration>
+                    <createChecksum>true</createChecksum>
+                </configuration>
+            </plugin>
+
+            <!-- Line ending fix: CR LF -> LF (unix style) -->
+            <plugin>
+                <groupId>com.google.code.maven-replacer-plugin</groupId>
+                <artifactId>replacer</artifactId>
+                <version>1.5.2</version>
+                <executions>
+                    <execution>
+                        <phase>prepare-package</phase>
+                        <goals>
+                            <goal>replace</goal>
+                        </goals>
+                    </execution>
+                </executions>
+                <configuration>
+                    <includes>
+                        <include>
+                            maven-repo/com/socialexplorer/${project.artifactId}/${project.version}/${project.artifactId}-${project.version}.pom
+                        </include>
+                        <include>maven-repo/com/socialexplorer/${project.artifactId}/maven-metadata-local.xml</include>
+                    </includes>
+
+                    <replacements>
+                        <replacement>
+                            <token>\r</token>
+                            <value></value>
+                        </replacement>
+                    </replacements>
+                </configuration>
+            </plugin>
+
+            <!-- Create checksums for files -->
+            <plugin>
+                <groupId>net.ju-n.maven.plugins</groupId>
+                <artifactId>checksum-maven-plugin</artifactId>
+                <version>1.2</version>
+                <executions>
+                    <execution>
+                        <goals>
+                            <goal>files</goal>
+                        </goals>
+                        <phase>prepare-package</phase>
+                    </execution>
+                </executions>
+                <configuration>
+                    <fileSets>
+                        <!-- Create checksums for maven-metadata-local.xml -->
+                        <fileSet>
+                            <directory>maven-repo/com/socialexplorer/${project.artifactId}</directory>
+                            <includes>
+                                <include>maven-metadata-local.xml</include>
+                            </includes>
+                        </fileSet>
+                        <!-- Create checksums for fastdbf4j artifact's pom and jar -->
+                        <fileSet>
+                            <directory>maven-repo/com/socialexplorer/${project.artifactId}/${project.version}
+                            </directory>
+                            <includes>
+                                <include>${project.artifactId}-${project.version}.jar</include>
+                                <include>${project.artifactId}-${project.version}.pom</include>
+                            </includes>
+                        </fileSet>
+                    </fileSets>
+                    <algorithms>
+                        <algorithm>MD5</algorithm>
+                        <algorithm>SHA-1</algorithm>
+                    </algorithms>
+                </configuration>
+            </plugin>
+        </plugins>
+    </build>
+
+</project>
