@@ -289,7 +289,7 @@ public class DbfRecord {
 
             val = Integer.toString(ByteUtils.swap(ByteUtils.byte2int(intBytes)));  // swap to get big endian
         } else {
-            val = new String(_data, column.getDataAddress(), column.getLength(), "US-ASCII");
+            val = new String(_data, column.getDataAddress(), column.getLength(), CHARSET_NAME);
         }
         return val;
     }
