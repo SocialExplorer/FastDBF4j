@@ -2,7 +2,7 @@
 <project version="4">
   <component name="ProjectModuleManager">
     <modules>
-      <module fileurl="file://$PROJECT_DIR$/fastdbf4j.iml" filepath="$PROJECT_DIR$/fastdbf4j.iml" />
+      <module fileurl="file://$PROJECT_DIR$/FastDBF4j.iml" filepath="$PROJECT_DIR$/FastDBF4j.iml" />
     </modules>
   </component>
 </project>

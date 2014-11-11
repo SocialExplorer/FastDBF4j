@@ -17,7 +17,7 @@ import java.util.Date;
  * Once you create a record the header can no longer be modified, since modifying the header would make a corrupt DBF file.
  */
 public class DbfRecord {
-    private static final String CHARSET_NAME = "ISO-8859-1";
+    private static final String CHARSET_NAME = "windows-1252";
 
     /***
      * Header provides information on all field types, sizes, precision and other useful information about the DBF.

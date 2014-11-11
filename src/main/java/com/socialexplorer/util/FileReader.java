@@ -39,12 +39,12 @@ public class FileReader {
      * @return
      * @throws IOException
      */
-    public String readChars(int numberOfChars) throws IOException {
+    public String readChars(int numberOfChars, String charsetName) throws IOException {
         byte[] charBuffer = new byte[11];
         for (int j = 0; j <= 10; j++) {
             charBuffer[j] = reader.readByte();
         }
-        String word = new String(charBuffer);
+        String word = new String(charBuffer, charsetName);
         // remove the terminating NULL character (00h, or 0 decimal)
         int nullPoint = word.indexOf((char) 0);
         if (nullPoint != -1) {

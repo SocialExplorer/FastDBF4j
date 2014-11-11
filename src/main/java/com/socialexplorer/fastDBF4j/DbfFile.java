@@ -11,7 +11,7 @@ import java.io.*;
  * We don't rely on that byte at all, and everything works with or without that byte, but it should be there by spec.
  */
 public class DbfFile {
-    private static final String CHARSET_NAME = "ISO-8859-1";
+    private static final String CHARSET_NAME = "windows-1252";
 
     /**
      * Helps read/write dbf file header information.

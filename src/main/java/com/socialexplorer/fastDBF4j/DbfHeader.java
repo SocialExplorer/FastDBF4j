@@ -1,167 +1,168 @@
 package com.socialexplorer.fastDBF4j;
 
-import com.socialexplorer.util.*;
+import com.socialexplorer.util.ByteUtils;
 import com.socialexplorer.util.FileReader;
 
-import java.io.*;
+import java.io.IOException;
+import java.io.UnsupportedEncodingException;
 import java.text.SimpleDateFormat;
 import java.util.*;
 
-/***
- /// This class represents a DBF IV file header.
- ///
- /// DBF files are really wasteful on space but this legacy format lives on because it's really really simple.
- /// It lacks much in features though.
- ///
- ///
- /// Thanks to Erik Bachmann for providing the DBF file structure information!!
- /// http://www.clicketyclick.dk/databases/xbase/format/dbf.html
- ///
- ///           _______________________  _______
- /// 00h /   0| Version number      *1|  ^
- ///          |-----------------------|  |
- /// 01h /   1| Date of last update   |  |
- /// 02h /   2|      YYMMDD        *21|  |
- /// 03h /   3|                    *14|  |
- ///          |-----------------------|  |
- /// 04h /   4| Number of records     | Record
- /// 05h /   5| in data file          | header
- /// 06h /   6| ( 32 bits )        *14|  |
- /// 07h /   7|                       |  |
- ///          |-----------------------|  |
- /// 08h /   8| Length of header   *14|  |
- /// 09h /   9| structure ( 16 bits ) |  |
- ///          |-----------------------|  |
- /// 0Ah /  10| Length of each record |  |
- /// 0Bh /  11| ( 16 bits )     *2 *14|  |
- ///          |-----------------------|  |
- /// 0Ch /  12| ( Reserved )        *3|  |
- /// 0Dh /  13|                       |  |
- ///          |-----------------------|  |
- /// 0Eh /  14| Incomplete transac.*12|  |
- ///          |-----------------------|  |
- /// 0Fh /  15| Encryption flag    *13|  |
- ///          |-----------------------|  |
- /// 10h /  16| Free record thread    |  |
- /// 11h /  17| (reserved for LAN     |  |
- /// 12h /  18|  only )               |  |
- /// 13h /  19|                       |  |
- ///          |-----------------------|  |
- /// 14h /  20| ( Reserved for        |  |            _        |=======================| ______
- ///          |   multi-user dBASE )  |  |           / 00h /  0| Field name in ASCII   |  ^
- ///          : ( dBASE III+ - )      :  |          /          : (terminated by 00h)   :  |
- ///          :                       :  |         |           |                       |  |
- /// 1Bh /  27|                       |  |         |   0Ah / 10|                       |  |
- ///          |-----------------------|  |         |           |-----------------------| For
- /// 1Ch /  28| MDX flag (dBASE IV)*14|  |         |   0Bh / 11| Field type (ASCII) *20| each
- ///          |-----------------------|  |         |           |-----------------------| field
- /// 1Dh /  29| Language driver     *5|  |        /    0Ch / 12| Field data address    |  |
- ///          |-----------------------|  |       /             |                     *6|  |
- /// 1Eh /  30| ( Reserved )          |  |      /              | (in memory !!!)       |  |
- /// 1Fh /  31|                     *3|  |     /       0Fh / 15| (dBASE III+)          |  |
- ///          |=======================|__|____/                |-----------------------|  |  -
- /// 20h /  32|                       |  |  ^          10h / 16| Field length       *22|  |   |
- ///          |- - - - - - - - - - - -|  |  |                  |-----------------------|  |   | *7
- ///          |                    *19|  |  |          11h / 17| Decimal count      *23|  |   |
- ///          |- - - - - - - - - - - -|  |  Field              |-----------------------|  |  -
- ///          |                       |  | Descriptor  12h / 18| ( Reserved for        |  |
- ///          :. . . . . . . . . . . .:  |  |array     13h / 19|   multi-user dBASE)*18|  |
- ///          :                       :  |  |                  |-----------------------|  |
- ///       n  |                       |__|__v_         14h / 20| Work area ID       *16|  |
- ///          |-----------------------|  |    \                |-----------------------|  |
- ///       n+1| Terminator (0Dh)      |  |     \       15h / 21| ( Reserved for        |  |
- ///          |=======================|  |      \      16h / 22|   multi-user dBASE )  |  |
- ///       m  | Database Container    |  |       \             |-----------------------|  |
- ///          :                    *15:  |        \    17h / 23| Flag for SET FIELDS   |  |
- ///          :                       :  |         |           |-----------------------|  |
- ///     / m+263                      |  |         |   18h / 24| ( Reserved )          |  |
- ///          |=======================|__v_ ___    |           :                       :  |
- ///          :                       :    ^       |           :                       :  |
- ///          :                       :    |       |           :                       :  |
- ///          :                       :    |       |   1Eh / 30|                       |  |
- ///          | Record structure      |    |       |           |-----------------------|  |
- ///          |                       |    |        \  1Fh / 31| Index field flag    *8|  |
- ///          |                       |    |         \_        |=======================| _v_____
- ///          |                       | Records
- ///          |-----------------------|    |
- ///          |                       |    |          _        |=======================| _______
- ///          |                       |    |         / 00h /  0| Record deleted flag *9|  ^
- ///          |                       |    |        /          |-----------------------|  |
- ///          |                       |    |       /           | Data               *10|  One
- ///          |                       |    |      /            : (ASCII)            *17: record
- ///          |                       |____|_____/             |                       |  |
- ///          :                       :    |                   |                       | _v_____
- ///          :                       :____|_____              |=======================|
- ///          :                       :    |
- ///          |                       |    |
- ///          |                       |    |
- ///          |                       |    |
- ///          |                       |    |
- ///          |                       |    |
- ///          |=======================|    |
- ///          |__End_of_File__________| ___v____  End of file ( 1Ah )  *11
+/**
+ * /// This class represents a DBF IV file header.
+ * ///
+ * /// DBF files are really wasteful on space but this legacy format lives on because it's really really simple.
+ * /// It lacks much in features though.
+ * ///
+ * ///
+ * /// Thanks to Erik Bachmann for providing the DBF file structure information!!
+ * /// http://www.clicketyclick.dk/databases/xbase/format/dbf.html
+ * ///
+ * ///           _______________________  _______
+ * /// 00h /   0| Version number      *1|  ^
+ * ///          |-----------------------|  |
+ * /// 01h /   1| Date of last update   |  |
+ * /// 02h /   2|      YYMMDD        *21|  |
+ * /// 03h /   3|                    *14|  |
+ * ///          |-----------------------|  |
+ * /// 04h /   4| Number of records     | Record
+ * /// 05h /   5| in data file          | header
+ * /// 06h /   6| ( 32 bits )        *14|  |
+ * /// 07h /   7|                       |  |
+ * ///          |-----------------------|  |
+ * /// 08h /   8| Length of header   *14|  |
+ * /// 09h /   9| structure ( 16 bits ) |  |
+ * ///          |-----------------------|  |
+ * /// 0Ah /  10| Length of each record |  |
+ * /// 0Bh /  11| ( 16 bits )     *2 *14|  |
+ * ///          |-----------------------|  |
+ * /// 0Ch /  12| ( Reserved )        *3|  |
+ * /// 0Dh /  13|                       |  |
+ * ///          |-----------------------|  |
+ * /// 0Eh /  14| Incomplete transac.*12|  |
+ * ///          |-----------------------|  |
+ * /// 0Fh /  15| Encryption flag    *13|  |
+ * ///          |-----------------------|  |
+ * /// 10h /  16| Free record thread    |  |
+ * /// 11h /  17| (reserved for LAN     |  |
+ * /// 12h /  18|  only )               |  |
+ * /// 13h /  19|                       |  |
+ * ///          |-----------------------|  |
+ * /// 14h /  20| ( Reserved for        |  |            _        |=======================| ______
+ * ///          |   multi-user dBASE )  |  |           / 00h /  0| Field name in ASCII   |  ^
+ * ///          : ( dBASE III+ - )      :  |          /          : (terminated by 00h)   :  |
+ * ///          :                       :  |         |           |                       |  |
+ * /// 1Bh /  27|                       |  |         |   0Ah / 10|                       |  |
+ * ///          |-----------------------|  |         |           |-----------------------| For
+ * /// 1Ch /  28| MDX flag (dBASE IV)*14|  |         |   0Bh / 11| Field type (ASCII) *20| each
+ * ///          |-----------------------|  |         |           |-----------------------| field
+ * /// 1Dh /  29| Language driver     *5|  |        /    0Ch / 12| Field data address    |  |
+ * ///          |-----------------------|  |       /             |                     *6|  |
+ * /// 1Eh /  30| ( Reserved )          |  |      /              | (in memory !!!)       |  |
+ * /// 1Fh /  31|                     *3|  |     /       0Fh / 15| (dBASE III+)          |  |
+ * ///          |=======================|__|____/                |-----------------------|  |  -
+ * /// 20h /  32|                       |  |  ^          10h / 16| Field length       *22|  |   |
+ * ///          |- - - - - - - - - - - -|  |  |                  |-----------------------|  |   | *7
+ * ///          |                    *19|  |  |          11h / 17| Decimal count      *23|  |   |
+ * ///          |- - - - - - - - - - - -|  |  Field              |-----------------------|  |  -
+ * ///          |                       |  | Descriptor  12h / 18| ( Reserved for        |  |
+ * ///          :. . . . . . . . . . . .:  |  |array     13h / 19|   multi-user dBASE)*18|  |
+ * ///          :                       :  |  |                  |-----------------------|  |
+ * ///       n  |                       |__|__v_         14h / 20| Work area ID       *16|  |
+ * ///          |-----------------------|  |    \                |-----------------------|  |
+ * ///       n+1| Terminator (0Dh)      |  |     \       15h / 21| ( Reserved for        |  |
+ * ///          |=======================|  |      \      16h / 22|   multi-user dBASE )  |  |
+ * ///       m  | Database Container    |  |       \             |-----------------------|  |
+ * ///          :                    *15:  |        \    17h / 23| Flag for SET FIELDS   |  |
+ * ///          :                       :  |         |           |-----------------------|  |
+ * ///     / m+263                      |  |         |   18h / 24| ( Reserved )          |  |
+ * ///          |=======================|__v_ ___    |           :                       :  |
+ * ///          :                       :    ^       |           :                       :  |
+ * ///          :                       :    |       |           :                       :  |
+ * ///          :                       :    |       |   1Eh / 30|                       |  |
+ * ///          | Record structure      |    |       |           |-----------------------|  |
+ * ///          |                       |    |        \  1Fh / 31| Index field flag    *8|  |
+ * ///          |                       |    |         \_        |=======================| _v_____
+ * ///          |                       | Records
+ * ///          |-----------------------|    |
+ * ///          |                       |    |          _        |=======================| _______
+ * ///          |                       |    |         / 00h /  0| Record deleted flag *9|  ^
+ * ///          |                       |    |        /          |-----------------------|  |
+ * ///          |                       |    |       /           | Data               *10|  One
+ * ///          |                       |    |      /            : (ASCII)            *17: record
+ * ///          |                       |____|_____/             |                       |  |
+ * ///          :                       :    |                   |                       | _v_____
+ * ///          :                       :____|_____              |=======================|
+ * ///          :                       :    |
+ * ///          |                       |    |
+ * ///          |                       |    |
+ * ///          |                       |    |
+ * ///          |                       |    |
+ * ///          |                       |    |
+ * ///          |=======================|    |
+ * ///          |__End_of_File__________| ___v____  End of file ( 1Ah )  *11
  */
 
 public class DbfHeader implements Cloneable {
-    private static final String CHARSET_NAME = "ISO-8859-1";
+    private static final String CHARSET_NAME = "windows-1252";
 
-    /***
+    /**
      * Header file descriptor size is 33 bytes (32 bytes + 1 terminator byte), followed by column metadata which is 32 bytes each.
      */
     public final int fileDescriptorSize = 33;
 
-    /***
+    /**
      * Field or DBF Column descriptor is 32 bytes long.
      */
     public final int columnDescriptorSize = 32;
 
-    /***
+    /**
      * type of the file, must be 03h
      */
     private final int _fileType = 0x03;
 
-    /***
+    /**
      * Date the file was last updated.
      */
     private Date _updateDate;
 
-    /***
+    /**
      * Number of records in the datafile, 32bit little-endian, unsigned
      */
     private long _numRecords = 0;
 
-    /***
+    /**
      * Length of the header structure
      * empty header is 33 bytes long. Each column adds 32 bytes.
      */
     private int _headerLength = fileDescriptorSize;
 
-    /***
+    /**
      * Length of the records, ushort - unsigned 16 bit integer
      */
     private int _recordLength = 1;  //start with 1 because the first byte is a delete flag
 
-    /***
+    /**
      * DBF fields/columns
      */
     private List<DbfColumn> _fields;
 
-    /***
+    /**
      * indicates whether header columns can be modified!
      */
     private boolean _locked = false;
 
-    /***
+    /**
      * keeps column name index for the header, must clear when header columns change.
      */
     private Map<String, Integer> _columnNameIndex = null;
 
-    /***
+    /**
      * When object is modified dirty flag is set.
      */
     private boolean _isDirty = false;
 
-    /***
+    /**
      * _emptyRecord is an array used to clear record data in CDbf4Record.
      * This is shared by all record objects, used to speed up clearing fields or entire record.
      * <seealso cref="getEmptyDataRecord"/>
@@ -179,24 +180,27 @@ public class DbfHeader implements Cloneable {
         _updateDate = cal.getTime();
     }
 
-    /***
+    /**
      * Create DbfHeader object using the specified column capacity.
+     *
      * @param fieldCapacity initial column capacity
      */
     public DbfHeader(int fieldCapacity) {
         _fields = new ArrayList<DbfColumn>(fieldCapacity);
     }
 
-    /***
+    /**
      * Gets header length.
+     *
      * @return
      */
     public int HeaderLength() {
         return _headerLength;
     }
 
-    /***
+    /**
      * Add a new column to the DBF header.
+     *
      * @param newColumn column to be added
      * @throws Exception
      */
@@ -228,8 +232,9 @@ public class DbfHeader implements Cloneable {
         _columnNameIndex = null;
     }
 
-    /***
+    /**
      * Create and add a new column with specified name and type.
+     *
      * @param name Name of the new column.
      * @param type Type of the new column.
      * @throws Exception
@@ -238,11 +243,12 @@ public class DbfHeader implements Cloneable {
         addColumn(new DbfColumn(name, type));
     }
 
-    /***
+    /**
      * Create and add a new column with specified name, type, length, and decimal precision.
-     * @param name Field name. Uniqueness is not enforced.
-     * @param type Type of the new column.
-     * @param length Length of the field including decimal point and decimal numbers.
+     *
+     * @param name     Field name. Uniqueness is not enforced.
+     * @param type     Type of the new column.
+     * @param length   Length of the field including decimal point and decimal numbers.
      * @param decimals Number of decimal places to keep.
      * @throws Exception
      */
@@ -250,8 +256,9 @@ public class DbfHeader implements Cloneable {
         addColumn(new DbfColumn(name, type, length, decimals));
     }
 
-    /***
+    /**
      * Remove column from header definition.
+     *
      * @param index Index of the column to be removed.
      * @throws Exception
      */
@@ -309,13 +316,13 @@ public class DbfHeader implements Cloneable {
         return null;
     }    */
 
-    /***
+    /**
      * Gets column at specified index. Index is 0 based.
+     *
      * @param index Zero based index.
      * @return DbfColumn object at specified index.
      */
-    public DbfColumn get(int index)
-    {
+    public DbfColumn get(int index) {
         return _fields.get(index);
     }
 
@@ -346,7 +353,7 @@ public class DbfHeader implements Cloneable {
         return -1;
     }  */
 
-    /***
+    /**
      * Returns an empty data record. This is used to clear columns
      *
      * The reason we put this in the header class is because it allows us to use the CDbf4Record class
@@ -357,11 +364,11 @@ public class DbfHeader implements Cloneable {
      * of this empty dataset for all of them.
      * If we had put it in the Record class then we would be taking up twice as much space unnecessarily.
      * The empty record also fits the model and everything is neatly encapsulated and safe.
+     *
      * @return an empty data record
      * @throws UnsupportedEncodingException
      */
-    protected byte[] getEmptyDataRecord() throws UnsupportedEncodingException
-    {
+    protected byte[] getEmptyDataRecord() throws UnsupportedEncodingException {
         if (_emptyRecord == null) {
             //initialize array for clearing data quickly
             String value = String.format("%1$" + (int) _recordLength + "s", " ");
@@ -373,91 +380,88 @@ public class DbfHeader implements Cloneable {
         return _emptyRecord;
     }
 
-    /***
+    /**
      * @return Number of columns in this dbf header.
      */
-    public int getColumnCount()
-    {
+    public int getColumnCount() {
         return _fields.size();
     }
 
-    /***
+    /**
      * Size of one record in bytes. All fields + 1 byte delete flag.
+     *
      * @return
      */
-    public int getRecordLength()
-    {
+    public int getRecordLength() {
         return _recordLength;
     }
 
-    /***
+    /**
      * Get number of records in the DBF.
+     *
      * @return
      */
-    public long getRecordCount()
-    {
+    public long getRecordCount() {
         return _numRecords;
     }
 
-    /***
+    /**
      * The reason we allow client to set RecordCount is because in certain streams
      * like internet streams we can not update record count as we write out records,
      * we have to set it in advance, so client has to be able to modify this property.
+     *
      * @param value
      */
-    public void setRecordCount(long value)
-    {
+    public void setRecordCount(long value) {
         _numRecords = value;
 
         //set the dirty bit
         _isDirty = true;
     }
 
-    /***
+    /**
      * Get/set whether this header is read only or can be modified. When you create a DbfRecord
      * object and pass a header to it, CDbfRecord locks the header so that it can not be modified
      * any longer in order to preserve DBF integrity.
+     *
      * @return
      */
-    boolean getLocked()
-    {
+    boolean getLocked() {
         return _locked;
     }
 
-    void setLocked(boolean value)
-    {
+    void setLocked(boolean value) {
         _locked = value;
     }
 
-    /***
+    /**
      * Use this method with caution. Headers are locked for a reason, to prevent DBF from becoming corrupt.
      */
     public void unlock() {
         _locked = false;
     }
 
-    /***
+    /**
      * Returns true when this object is modified after read or write.
+     *
      * @return
      */
-    public boolean getIsDirty()
-    {
+    public boolean getIsDirty() {
         return _isDirty;
     }
 
-    public void setIsDirty(boolean value)
-    {
+    public void setIsDirty(boolean value) {
         _isDirty = value;
     }
 
-    /***
+    /**
      * Encoding must be ASCII for this binary writer.
      * See class description for DBF file structure.
+     *
      * @param dbfFile
      * @throws Exception
      */
-    public void write(FileReader dbfFile) throws Exception
-    {
+    public void write(FileReader dbfFile) throws Exception {
 
         // write the header
         // write the output file type.
@@ -533,9 +537,10 @@ public class DbfHeader implements Cloneable {
         _locked = true;
     }
 
-    /***
+    /**
      * Read header data, make sure the stream is positioned at the start of the file to read the header otherwise you will get an exception.
      * When this function is done the position will be the first record.
+     *
      * @param dbfFile little endian reader
      * @throws IOException
      * @throws Exception
@@ -583,7 +588,7 @@ public class DbfHeader implements Cloneable {
                  * read the field name.
                  * field name: 10 8-bit characters, ASCII (terminated by 00h)
                  */
-                String sFieldName = dbfFile.readChars(11);
+                String sFieldName = dbfFile.readChars(11, CHARSET_NAME);
 
                 // read the field type
                 byte fieldType = dbfFile.readByte();
