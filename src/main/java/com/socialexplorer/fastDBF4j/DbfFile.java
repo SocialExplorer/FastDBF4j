@@ -1,8 +1,11 @@
 package com.socialexplorer.fastDBF4j;
 
+import com.socialexplorer.util.Configuration;
 import com.socialexplorer.util.FileReader;
 
 import java.io.*;
+import java.nio.charset.Charset;
+import java.nio.charset.UnsupportedCharsetException;
 
 /**
  * This class represents a DBF file. You can create new, open, update and save DBF files using this class and supporting classes.
@@ -11,8 +14,6 @@ import java.io.*;
  * We don't rely on that byte at all, and everything works with or without that byte, but it should be there by spec.
  */
 public class DbfFile {
-    private static final String CHARSET_NAME = "windows-1252";
-
     /**
      * Helps read/write dbf file header information.
      */
@@ -50,6 +51,23 @@ public class DbfFile {
      * "r", "rw"
      */
     protected String _fileAccess = "";
+
+    public DbfFile() {
+        Configuration.setEncodingName(Configuration.DEFAULT_ENCODING_NAME);
+        Configuration.setShouldTryToSetEncodingFromLanguageDriver(true);
+    }
+
+    /**
+     * Force the reader to use the provided charset encoding.
+     * @param encodingName Encoding name.
+     */
+    public DbfFile(String encodingName) {
+        if (!Charset.isSupported(encodingName)) {
+            throw new UnsupportedCharsetException("Encoding :" + encodingName + " not supported!");
+        }
+        Configuration.setEncodingName(encodingName);
+        Configuration.setShouldTryToSetEncodingFromLanguageDriver(false);
+    }
 
     /**
      * Open a DBF file or create a new one.
@@ -296,7 +314,7 @@ public class DbfFile {
         byte[] data = new byte[column.getLength()];
         _dbfFile.read(data, 0, column.getLength());
 
-        result.append(new String(data, 0, column.getLength(), CHARSET_NAME));
+        result.append(new String(data, 0, column.getLength(), Configuration.getEncodingName()));
 
         return true;
     }

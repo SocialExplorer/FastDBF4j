@@ -1,10 +1,12 @@
 package com.socialexplorer.fastDBF4j;
 
 import com.socialexplorer.util.ByteUtils;
+import com.socialexplorer.util.Configuration;
 import com.socialexplorer.util.FileReader;
 
 import java.io.IOException;
 import java.io.UnsupportedEncodingException;
+import java.nio.charset.Charset;
 import java.text.SimpleDateFormat;
 import java.util.*;
 
@@ -104,8 +106,6 @@ import java.util.*;
  */
 
 public class DbfHeader implements Cloneable {
-    private static final String CHARSET_NAME = "windows-1252";
-
     /**
      * Header file descriptor size is 33 bytes (32 bytes + 1 terminator byte), followed by column metadata which is 32 bytes each.
      */
@@ -168,6 +168,8 @@ public class DbfHeader implements Cloneable {
      * <seealso cref="getEmptyDataRecord"/>
      */
     private byte[] _emptyRecord = null;
+
+    private byte languageDriverId;
 
     public DbfHeader() {
         // create a list of fields of default size
@@ -372,7 +374,7 @@ public class DbfHeader implements Cloneable {
         if (_emptyRecord == null) {
             //initialize array for clearing data quickly
             String value = String.format("%1$" + (int) _recordLength + "s", " ");
-            _emptyRecord = value.getBytes(CHARSET_NAME);
+            _emptyRecord = value.getBytes(Configuration.getEncodingName());
 
             //_emptyRecord = Encoding.ASCII.GetBytes("".PadLeft((int) _recordLength, ' ').ToCharArray());
         }
@@ -546,117 +548,127 @@ public class DbfHeader implements Cloneable {
      * @throws Exception
      */
     public void read(com.socialexplorer.util.FileReader dbfFile) throws IOException, Exception {
-        try {
-            // type of reader.
-            int nFileType = dbfFile.readByte();
+        // type of reader.
+        int nFileType = dbfFile.readByte();
 
-            if (nFileType != 0x03) {
-                throw new Exception("Unsupported DBF reader Type " + nFileType);
-            }
-
-            // parse the update date information
-            int year = (int) dbfFile.readByte();
-            int month = (int) dbfFile.readByte();
-            int day = (int) dbfFile.readByte();
-            Calendar cal = Calendar.getInstance();
-            cal.set(year + 1900, month, day);
-            _updateDate = cal.getTime();
-
-            // read the number of records
-            int numRecordsInt = dbfFile.readLittleEndianInt(); // signed integer
-            _numRecords = ByteUtils.getUnsigned(numRecordsInt); // unsigned long
-
-            // read the length of the header structure.
-            _headerLength = dbfFile.readLittleEndianShort();               // TODO
-
-            // read the length of a record
-            _recordLength = dbfFile.readLittleEndianShort();
-
-            // skip the reserved bytes in the header.
-            dbfFile.skipBytes(20);
-
-            // calculate the number of fields in the header
-            int nNumFields = (_headerLength - fileDescriptorSize) / columnDescriptorSize;
-
-            // offset from start of record, start at 1 because that's the delete flag.
-            int nDataOffset = 1;
-
-            // read all of the header records
-            _fields = new ArrayList<DbfColumn>(nNumFields);
-            for (int i = 0; i < nNumFields; i++) {
-                /**
-                 * read the field name.
-                 * field name: 10 8-bit characters, ASCII (terminated by 00h)
-                 */
-                String sFieldName = dbfFile.readChars(11, CHARSET_NAME);
-
-                // read the field type
-                byte fieldType = dbfFile.readByte();
-                char cDbaseType = (char) fieldType;
-
-                // read the field data address, offset from the start of the record.
-                int nFieldDataAddress = dbfFile.readLittleEndianInt();
-
-                // read the field length in bytes
-                // if field type is char, then read FieldLength and Decimal count as one number to allow char fields to be
-                // longer than 256 bytes (ASCII char). This is the way Clipper and FoxPro do it, and there is really no downside
-                // since for char fields decimal count should be zero for other versions that do not support this extended functionality.\
-                int nFieldLength = 0;
-                int nDecimals = 0;
-                if (cDbaseType == 'C' || cDbaseType == 'c') {
-                    //treat decimal count as high byte
-                    nFieldLength = (int) dbfFile.readLittleEndianShort();
-                } else {
-                    //read field length as an unsigned byte.
-                    nFieldLength = (int) dbfFile.readByte();
-
-                    //read decimal count as one byte
-                    nDecimals = (int) dbfFile.readByte();
-                }
-
-                // read the reserved bytes
-                dbfFile.skipBytes(14);
-
-                // create and add field to collection
-                _fields.add(new DbfColumn(sFieldName, DbfColumn.getDbaseType(cDbaseType), nFieldLength, nDecimals, nDataOffset));
-
-                // add up address information, you can not trust the address recorded in the DBF file...
-                nDataOffset += nFieldLength;
-            }
-
-            // Last byte is a marker for the end of the field definitions.
-            dbfFile.skipBytes(1);
-
-            // read any extra header bytes... move to first record
-            // equivalent to reader.BaseStream.Seek(_headerLength, SeekOrigin.Begin) except that we are not using the seek function since
-            // we need to support streams that can not seek like web connections.
-            int nExtraReadBytes = _headerLength - (fileDescriptorSize + (columnDescriptorSize * _fields.size()));
-            if (nExtraReadBytes > 0) {
-                dbfFile.skipBytes(nExtraReadBytes);
-            }
-
-            /* if the stream is not forward-only, calculate number of records using file size,
-                sometimes the header does not contain the correct record count
-                if we are reading the file from the web, we have to use readNext() functions anyway so
-                Number of records is not so important and we can trust the DBF to have it stored correctly. */
-            if (_numRecords == 0) {
-//                //notice here that we subtract file end byte which is supposed to be 0x1A,
-//                //but some DBF files are incorrectly written without this byte, so we round off to nearest integer.
-//                //that gives a correct result with or without ending byte.
-                if (_recordLength > 0) {
-                    _numRecords = (long) Math.round(((double) (dbfFile.length() - _headerLength - 1) / _recordLength));
-                }
-            }
-
-            // lock header since it was read from a file. we don't want it modified because that would corrupt the file.
-            // user can override this lock if really necessary by calling UnLock() method.
-            _locked = true;
-
-            // clear dirty bit
-            _isDirty = false;
-        } catch (Exception e) {
-            throw e;
+        if (nFileType != 0x03) {
+            throw new Exception("Unsupported DBF reader Type " + nFileType);
         }
+
+        // parse the update date information
+        int year = (int) dbfFile.readByte();
+        int month = (int) dbfFile.readByte();
+        int day = (int) dbfFile.readByte();
+        Calendar cal = Calendar.getInstance();
+        cal.set(year + 1900, month, day);
+        _updateDate = cal.getTime();
+
+        // read the number of records
+        int numRecordsInt = dbfFile.readLittleEndianInt(); // signed integer
+        _numRecords = ByteUtils.getUnsigned(numRecordsInt); // unsigned long
+
+        // read the length of the header structure.
+        _headerLength = dbfFile.readLittleEndianShort();               // TODO
+
+        // read the length of a record
+        _recordLength = dbfFile.readLittleEndianShort();
+
+        // Skip everything till the language driver ID.
+        dbfFile.skipBytes(17);
+
+        // Read the language driver ID.
+        languageDriverId = dbfFile.readByte();
+        tryToSetEncoding();
+
+        // Skip two reserved bytes (30. and 31. byte).
+        dbfFile.skipBytes(2);
+
+        // calculate the number of fields in the header
+        int nNumFields = (_headerLength - fileDescriptorSize) / columnDescriptorSize;
+
+        // offset from start of record, start at 1 because that's the delete flag.
+        int nDataOffset = 1;
+
+        // read all of the header records
+        _fields = new ArrayList<DbfColumn>(nNumFields);
+        for (int i = 0; i < nNumFields; i++) {
+            /**
+             * read the field name.
+             * field name: 10 8-bit characters, ASCII (terminated by 00h)
+             */
+            String sFieldName = dbfFile.readChars(11, Configuration.getEncodingName());
+
+            // read the field type
+            byte fieldType = dbfFile.readByte();
+            char cDbaseType = (char) fieldType;
+
+            // read the field data address, offset from the start of the record.
+            int nFieldDataAddress = dbfFile.readLittleEndianInt();
+
+            // read the field length in bytes
+            // if field type is char, then read FieldLength and Decimal count as one number to allow char fields to be
+            // longer than 256 bytes (ASCII char). This is the way Clipper and FoxPro do it, and there is really no downside
+            // since for char fields decimal count should be zero for other versions that do not support this extended functionality.\
+            int nFieldLength = 0;
+            int nDecimals = 0;
+            if (cDbaseType == 'C' || cDbaseType == 'c') {
+                //treat decimal count as high byte
+                nFieldLength = (int) dbfFile.readLittleEndianShort();
+            } else {
+                //read field length as an unsigned byte.
+                nFieldLength = (int) dbfFile.readByte();
+
+                //read decimal count as one byte
+                nDecimals = (int) dbfFile.readByte();
+            }
+
+            // read the reserved bytes
+            dbfFile.skipBytes(14);
+
+            // create and add field to collection
+            _fields.add(new DbfColumn(sFieldName, DbfColumn.getDbaseType(cDbaseType), nFieldLength, nDecimals, nDataOffset));
+
+            // add up address information, you can not trust the address recorded in the DBF file...
+            nDataOffset += nFieldLength;
+        }
+
+        // Last byte is a marker for the end of the field definitions.
+        dbfFile.skipBytes(1);
+
+        // read any extra header bytes... move to first record
+        // equivalent to reader.BaseStream.Seek(_headerLength, SeekOrigin.Begin) except that we are not using the seek function since
+        // we need to support streams that can not seek like web connections.
+        int nExtraReadBytes = _headerLength - (fileDescriptorSize + (columnDescriptorSize * _fields.size()));
+        if (nExtraReadBytes > 0) {
+            dbfFile.skipBytes(nExtraReadBytes);
+        }
+
+        /* if the stream is not forward-only, calculate number of records using file size,
+            sometimes the header does not contain the correct record count
+            if we are reading the file from the web, we have to use readNext() functions anyway so
+            Number of records is not so important and we can trust the DBF to have it stored correctly. */
+        if (_numRecords == 0) {
+                //notice here that we subtract file end byte which is supposed to be 0x1A,
+                //but some DBF files are incorrectly written without this byte, so we round off to nearest integer.
+                //that gives a correct result with or without ending byte.
+            if (_recordLength > 0) {
+                _numRecords = (long) Math.round(((double) (dbfFile.length() - _headerLength - 1) / _recordLength));
+            }
+        }
+
+        // lock header since it was read from a file. we don't want it modified because that would corrupt the file.
+        // user can override this lock if really necessary by calling UnLock() method.
+        _locked = true;
+
+        // clear dirty bit
+        _isDirty = false;
+    }
+
+    private void tryToSetEncoding() throws UnsupportedEncodingException {
+        String encoding = DbfEncodings.getCodePageFromLanguageId(languageDriverId);
+        if (encoding != null && Charset.isSupported(encoding) && Configuration.getShouldTryToSetEncodingFromLanguageDriver()) {
+            Configuration.setEncodingName(encoding);
+        } // leave default value otherwise
     }
 
     public Object clone() throws CloneNotSupportedException {
