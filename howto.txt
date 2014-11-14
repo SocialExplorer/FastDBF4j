@@ -1,1 +1,0 @@
-mvn install:install-file -DgroupId=com.socialexplorer -DartifactId=fastdbf4j -Dversion=1.0.1 -Dfile=fastdbf4j.jar -Dpackaging=jar -DgeneratePom=true -DlocalRepositoryPath=./maven-repo -DcreateChecksum=true

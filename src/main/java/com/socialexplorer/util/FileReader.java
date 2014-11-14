@@ -1,6 +1,7 @@
 package com.socialexplorer.util;
 
-import java.io.*;
+import java.io.IOException;
+import java.io.RandomAccessFile;
 
 public class FileReader {
     /**
@@ -21,6 +22,12 @@ public class FileReader {
         return ByteUtils.swap(reader.readShort());
     }
 
+    public int readLittleEndianUnsignedShort() throws IOException {
+        byte b1 = reader.readByte(); // least significant byte comes first in little endian
+        byte b2 = reader.readByte(); // most significant
+
+        return (b2 << 8) | (b1 & 0xFF);
+    }
 
     public void writeLittleEndianInt(int bigEndianInt) throws IOException {
         reader.writeInt(ByteUtils.swap(bigEndianInt));
@@ -40,7 +47,7 @@ public class FileReader {
      * @throws IOException
      */
     public String readChars(int numberOfChars, String charsetName) throws IOException {
-        byte[] charBuffer = new byte[11];
+        byte[] charBuffer = new byte[numberOfChars];
         for (int j = 0; j <= 10; j++) {
             charBuffer[j] = reader.readByte();
         }

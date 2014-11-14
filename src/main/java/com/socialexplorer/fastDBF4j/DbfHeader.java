@@ -1,5 +1,6 @@
 package com.socialexplorer.fastDBF4j;
 
+import com.socialexplorer.fastDBF4j.exceptions.InvalidDbfFileException;
 import com.socialexplorer.util.ByteUtils;
 import com.socialexplorer.util.Configuration;
 import com.socialexplorer.util.FileReader;
@@ -105,7 +106,7 @@ import java.util.*;
  * ///          |__End_of_File__________| ___v____  End of file ( 1Ah )  *11
  */
 
-public class DbfHeader implements Cloneable {
+public class DbfHeader {
     /**
      * Header file descriptor size is 33 bytes (32 bytes + 1 terminator byte), followed by column metadata which is 32 bytes each.
      */
@@ -119,67 +120,71 @@ public class DbfHeader implements Cloneable {
     /**
      * type of the file, must be 03h
      */
-    private final int _fileType = 0x03;
+    private final int fileType = 0x03;
 
     /**
      * Date the file was last updated.
      */
-    private Date _updateDate;
+    private Date updateDate;
 
     /**
      * Number of records in the datafile, 32bit little-endian, unsigned
      */
-    private long _numRecords = 0;
+    private long numberOfRecords = 0;
 
     /**
      * Length of the header structure
      * empty header is 33 bytes long. Each column adds 32 bytes.
      */
-    private int _headerLength = fileDescriptorSize;
+    private int headerLength = fileDescriptorSize;
 
     /**
      * Length of the records, ushort - unsigned 16 bit integer
      */
-    private int _recordLength = 1;  //start with 1 because the first byte is a delete flag
+    private int recordLength = 1;  //start with 1 because the first byte is a delete flag
 
     /**
      * DBF fields/columns
      */
-    private List<DbfColumn> _fields;
+    private List<DbfColumn> fields;
 
     /**
      * indicates whether header columns can be modified!
      */
-    private boolean _locked = false;
+    private boolean locked = false;
 
     /**
-     * keeps column name index for the header, must clear when header columns change.
+     * Keeps column name index for the header, must clear when header columns change.
      */
-    private Map<String, Integer> _columnNameIndex = null;
+    private Map<String, Integer> columnNameIndex = null;
 
     /**
      * When object is modified dirty flag is set.
      */
-    private boolean _isDirty = false;
+    private boolean isDirty = false;
 
     /**
-     * _emptyRecord is an array used to clear record data in CDbf4Record.
+     * emptyRecord is an array used to clear record data in CDbf4Record.
      * This is shared by all record objects, used to speed up clearing fields or entire record.
-     * <seealso cref="getEmptyDataRecord"/>
+     * @see #getEmptyDataRecord
      */
-    private byte[] _emptyRecord = null;
-
+    private byte[] emptyRecord = null;
+    /**
+     * Byte that contains information about the encoding used to write the DBF file. If this byte does not contain
+     * valid data, windows-1252 will be used by default. Also, if the encoding is provided externally, e.g. through
+     * a CPG file, this byte will be ignored.
+     */
     private byte languageDriverId;
 
     public DbfHeader() {
         // create a list of fields of default size
-        _fields = new ArrayList<DbfColumn>();
+        fields = new ArrayList<DbfColumn>();
 
         Calendar cal = Calendar.getInstance();
         cal.set(Calendar.YEAR, 1900);
         cal.set(Calendar.MONTH, 1);
         cal.set(Calendar.DAY_OF_MONTH, 1);
-        _updateDate = cal.getTime();
+        updateDate = cal.getTime();
     }
 
     /**
@@ -188,7 +193,7 @@ public class DbfHeader implements Cloneable {
      * @param fieldCapacity initial column capacity
      */
     public DbfHeader(int fieldCapacity) {
-        _fields = new ArrayList<DbfColumn>(fieldCapacity);
+        fields = new ArrayList<DbfColumn>(fieldCapacity);
     }
 
     /**
@@ -197,41 +202,44 @@ public class DbfHeader implements Cloneable {
      * @return
      */
     public int HeaderLength() {
-        return _headerLength;
+        return headerLength;
     }
 
     /**
      * Add a new column to the DBF header.
      *
      * @param newColumn column to be added
-     * @throws Exception
+     * @exception IllegalStateException If trying to modify header while it is locked.
+     * @exception IllegalArgumentException If the column add would cause record length overflow.
      */
-    public void addColumn(DbfColumn newColumn) throws Exception {
+    public void addColumn(DbfColumn newColumn) {
         // throw exception if the header is locked
-        if (_locked) {
-            throw new Exception("This header is locked and cannot be modified. Modifying the header would result in a corrupt DBF file. You can unlock the header by calling unlock() method.");
+        if (locked) {
+            throw new IllegalStateException("This header is locked and cannot be modified. " +
+                    "Modifying the header would result in a corrupt DBF file. " +
+                    "You can unlock the header by calling unlock() method.");
         }
 
         //since we are breaking the spec rules about max number of fields, we should at least
         //check that the record length stays within a number that can be recorded in the header!
         //we have 2 unsigned bytes for record length for a maximum of 65535.
-        if (_recordLength + newColumn.getLength() > 65535)
-            throw new Exception("Unable to add new column. Adding this column puts the record length over the maximum (which is 65535 bytes).");
+        if (recordLength + newColumn.getLength() > 65535)
+            throw new IllegalArgumentException("Unable to add new column. Adding this column puts the record length over the maximum (which is 65535 bytes).");
 
         // add the column
-        _fields.add(newColumn);
+        fields.add(newColumn);
 
         // update offset bits, record and header lengths
-        newColumn._dataAddress = _recordLength;
-        _recordLength += newColumn.getLength();
-        _headerLength += columnDescriptorSize;
+        newColumn.dataAddress = recordLength;
+        recordLength += newColumn.getLength();
+        headerLength += columnDescriptorSize;
 
         // clear empty record
-        _emptyRecord = null;
+        emptyRecord = null;
 
         // set dirty bit
-        _isDirty = true;
-        _columnNameIndex = null;
+        isDirty = true;
+        columnNameIndex = null;
     }
 
     /**
@@ -239,9 +247,8 @@ public class DbfHeader implements Cloneable {
      *
      * @param name Name of the new column.
      * @param type Type of the new column.
-     * @throws Exception
      */
-    public void addColumn(String name, DbfColumn.DbfColumnType type) throws Exception {
+    public void addColumn(String name, DbfColumn.DbfColumnType type) {
         addColumn(new DbfColumn(name, type));
     }
 
@@ -252,9 +259,8 @@ public class DbfHeader implements Cloneable {
      * @param type     Type of the new column.
      * @param length   Length of the field including decimal point and decimal numbers.
      * @param decimals Number of decimal places to keep.
-     * @throws Exception
      */
-    public void addColumn(String name, DbfColumn.DbfColumnType type, int length, int decimals) throws Exception {
+    public void addColumn(String name, DbfColumn.DbfColumnType type, int length, int decimals) {
         addColumn(new DbfColumn(name, type, length, decimals));
     }
 
@@ -262,281 +268,250 @@ public class DbfHeader implements Cloneable {
      * Remove column from header definition.
      *
      * @param index Index of the column to be removed.
-     * @throws Exception
+     * @exception IllegalStateException If trying to modify header while it is locked.
      */
-    public void removeColumn(int index) throws Exception {
+    public void removeColumn(int index) {
         // throw exception if the header is locked
-        if (_locked) {
-            throw new Exception("This header is locked and can not be modified. Modifying the header would result in a corrupt DBF file. You can unlock the header by calling UnLock() method.");
+        if (locked) {
+            throw new IllegalStateException("This header is locked and can not be modified. " +
+                    "Modifying the header would result in a corrupt DBF file. " +
+                    "You can unlock the header by calling UnLock() method.");
         }
 
-        DbfColumn oColRemove = _fields.get(index);
-        _fields.remove(index);
+        DbfColumn oColRemove = fields.get(index);
+        fields.remove(index);
 
 
-        oColRemove._dataAddress = 0;
-        _recordLength -= oColRemove.getLength();
-        _headerLength -= columnDescriptorSize;
+        oColRemove.dataAddress = 0;
+        recordLength -= oColRemove.getLength();
+        headerLength -= columnDescriptorSize;
 
         // if you remove a column offset shift for each of the columns
         // following the one removed, we need to update those offsets.
         int nRemovedColLen = oColRemove.getLength();
-        for (int i = index; i < _fields.size(); i++) {
-            _fields.get(i)._dataAddress -= nRemovedColLen;
+        for (int i = index; i < fields.size(); i++) {
+            fields.get(i).dataAddress -= nRemovedColLen;
         }
 
         //clear the empty record
-        _emptyRecord = null;
+        emptyRecord = null;
 
         //set dirty bit
-        _isDirty = true;
-        _columnNameIndex = null;
+        isDirty = true;
+        columnNameIndex = null;
     }
 
-    /// <summary>
-    /// Look up a column index by name. Note that this is case sensitive, internally it does a lookup using a dictionary.
-    /// </summary>
-    /// <param name="sName"></param>
-    /*public com.socialexplorer.geoservices.fastDbf.DbfColumn this[String sName]
-    {
-        get
-        {
-            int colIndex = FindColumn(sName);
-            if (colIndex > -1)
-                return _fields[colIndex];
-
-            return null;
-        }
-    }*/
-
-    /*public com.socialexplorer.geoservices.fastDbf.DbfColumn get(String sName)
-    {
-        int colIndex = FindColumn(sName);
+    /**
+     * Look up a column index by name. Note that this is case sensitive.
+     */
+    public DbfColumn getColumn(String columnName) {
+        int colIndex = findColumn(columnName);
         if (colIndex > -1)
-            return _fields.get(colIndex);
+            return fields.get(colIndex);
 
         return null;
-    }    */
+    }
 
     /**
      * Gets column at specified index. Index is 0 based.
-     *
      * @param index Zero based index.
      * @return DbfColumn object at specified index.
      */
     public DbfColumn get(int index) {
-        return _fields.get(index);
+        return fields.get(index);
     }
 
-    /// <summary>
-    /// Finds a column index by using a fast dictionary lookup-- creates column dictionary on first use. Returns -1 if not found. Note this is case sensitive!
-    /// </summary>
-    /// <param name="sName">Column name</param>
-    /// <returns>column index (0 based) or -1 if not found.</returns>
-    /*public int FindColumn(String sName) {
-
-        if (_columnNameIndex == null) {
-            _columnNameIndex = new HashMap<String, Integer>(_fields.size()); // Dictionary<String, Integer>(_fields.size());
-
-            //create a new index
-            for (int i = 0; i < _fields.size(); i++) {
-                _columnNameIndex.put(_fields.get(i).getName(), i);
+    /**
+     * Finds a column index by using a fast dictionary lookup-- creates column dictionary on first use. Returns -1 if not found. Note this is case sensitive!
+     * @param columnName Column name
+     * @return column index (0 based) or -1 if not found
+     */
+    public int findColumn(String columnName) {
+        if (columnNameIndex == null) {
+            // Create a new index
+            columnNameIndex = new HashMap<String, Integer>(fields.size());
+            for (int i = 0; i < fields.size(); i++) {
+                columnNameIndex.put(fields.get(i).getName(), i);
             }
         }
 
-        int columnIndex;
-        if(_columnNameIndex.get(sName) != null)
-        {
-
+        Integer columnIndex = columnNameIndex.get(columnName);
+        if(columnIndex != null) {
+             return columnIndex;
         }
-        if (_columnNameIndex.TryGetValue(sName, out columnIndex))
-            return columnIndex;
 
         return -1;
-    }  */
+    }
 
     /**
-     * Returns an empty data record. This is used to clear columns
-     *
-     * The reason we put this in the header class is because it allows us to use the CDbf4Record class
-     * in two ways.
+     * Returns an empty data record. This is used to clear columns. The reason we put this in the header class
+     * is because it allows us to use the CDbf4Record class in two ways.
      * 1. we can create one instance of the record and reuse it to write many records quickly
-     * clearing the data array by bitblting to it.
+     *    clearing the data array by bitblting to it.
      * 2. we can create many instances of the record (a collection of records) and have only one copy
-     * of this empty dataset for all of them.
+     *    of this empty dataset for all of them.
      * If we had put it in the Record class then we would be taking up twice as much space unnecessarily.
      * The empty record also fits the model and everything is neatly encapsulated and safe.
      *
-     * @return an empty data record
-     * @throws UnsupportedEncodingException
+     * @return An empty data record.
+     * @throws UnsupportedEncodingException If the named charset is not supported
      */
     protected byte[] getEmptyDataRecord() throws UnsupportedEncodingException {
-        if (_emptyRecord == null) {
-            //initialize array for clearing data quickly
-            String value = String.format("%1$" + (int) _recordLength + "s", " ");
-            _emptyRecord = value.getBytes(Configuration.getEncodingName());
-
-            //_emptyRecord = Encoding.ASCII.GetBytes("".PadLeft((int) _recordLength, ' ').ToCharArray());
+        if (emptyRecord == null) { // create lazily
+            String value = String.format("%1$" + recordLength + "s", " ");
+            emptyRecord = value.getBytes(Configuration.getEncodingName());
         }
 
-        return _emptyRecord;
+        return emptyRecord;
     }
 
     /**
      * @return Number of columns in this dbf header.
      */
     public int getColumnCount() {
-        return _fields.size();
+        return fields.size();
     }
 
     /**
      * Size of one record in bytes. All fields + 1 byte delete flag.
-     *
      * @return
      */
     public int getRecordLength() {
-        return _recordLength;
+        return recordLength;
     }
 
     /**
-     * Get number of records in the DBF.
-     *
-     * @return
+     * @return Number of records in the DBF.
      */
     public long getRecordCount() {
-        return _numRecords;
+        return numberOfRecords;
     }
 
     /**
-     * The reason we allow client to set RecordCount is because in certain streams
+     * The reason client is allowed to set recordCount is because in certain streams
      * like internet streams we can not update record count as we write out records,
      * we have to set it in advance, so client has to be able to modify this property.
-     *
      * @param value
      */
     public void setRecordCount(long value) {
-        _numRecords = value;
+        numberOfRecords = value;
 
-        //set the dirty bit
-        _isDirty = true;
+        // Set the dirty bit
+        isDirty = true;
     }
 
     /**
      * Get/set whether this header is read only or can be modified. When you create a DbfRecord
-     * object and pass a header to it, CDbfRecord locks the header so that it can not be modified
+     * object and pass a header to it, DbfRecord locks the header so that it can not be modified
      * any longer in order to preserve DBF integrity.
-     *
-     * @return
+     * @return true if the header is locked, false otherwise
      */
     boolean getLocked() {
-        return _locked;
+        return locked;
     }
 
     void setLocked(boolean value) {
-        _locked = value;
+        locked = value;
     }
 
     /**
      * Use this method with caution. Headers are locked for a reason, to prevent DBF from becoming corrupt.
      */
     public void unlock() {
-        _locked = false;
+        locked = false;
     }
 
     /**
-     * Returns true when this object is modified after read or write.
-     *
-     * @return
+     * @return true if this object is modified after read or write
      */
     public boolean getIsDirty() {
-        return _isDirty;
+        return isDirty;
     }
 
     public void setIsDirty(boolean value) {
-        _isDirty = value;
+        isDirty = value;
     }
 
     /**
-     * Encoding must be ASCII for this binary writer.
      * See class description for DBF file structure.
      *
-     * @param dbfFile
-     * @throws Exception
+     *
+     * @param dbfFileWriter DBF file writer.
+     * @throws IOException  if an I/O error occurs.
      */
-    public void write(FileReader dbfFile) throws Exception {
+    public void write(FileReader dbfFileWriter) throws IOException {
 
         // write the header
         // write the output file type.
-        dbfFile.writeByte((byte) _fileType);
+        dbfFileWriter.writeByte((byte) fileType);
 
         // Update date format is YYMMDD, which is different from the column Date type (YYYYDDMM)
         SimpleDateFormat sdf = new SimpleDateFormat("yy");
-        dbfFile.writeByte((byte) Integer.parseInt(sdf.format(_updateDate)));
+        dbfFileWriter.writeByte((byte) Integer.parseInt(sdf.format(updateDate)));
 
         sdf.applyPattern("MM");
-        dbfFile.writeByte((byte) Integer.parseInt(sdf.format(_updateDate)));
+        dbfFileWriter.writeByte((byte) Integer.parseInt(sdf.format(updateDate)));
 
         sdf.applyPattern("dd");
-        dbfFile.writeByte((byte) Integer.parseInt(sdf.format(_updateDate)));
+        dbfFileWriter.writeByte((byte) Integer.parseInt(sdf.format(updateDate)));
 
         // write the number of records in the datafile. (32 bit number, little-endian unsigned)
-        dbfFile.writeLittleEndianInt((int) _numRecords);
+        dbfFileWriter.writeLittleEndianInt((int) numberOfRecords);
 
         // write the length of the header structure - 2 byte short
-        dbfFile.writeLittleEndianShort((short) _headerLength);
+        dbfFileWriter.writeLittleEndianShort((short) headerLength);
 
         // write the length of a record
-        dbfFile.writeLittleEndianShort((short) _recordLength);
+        dbfFileWriter.writeLittleEndianShort((short) recordLength);
 
         // write the reserved bytes in the header
         for (int i = 0; i < 20; i++) {
-            dbfFile.write((byte) 0);
+            dbfFileWriter.write((byte) 0);
         }
 
         // write all of the header records
         byte[] byteReserved = new byte[14];  // these are initialized to 0 by default.
-        for (int i = 0; i < _fields.size(); i++) {
+        for (int i = 0; i < fields.size(); i++) {
             int padValue = 11;
             String value = String.format("%1$-" + padValue + "s", "0");
-            value += _fields.get(i).getName();
+            value += fields.get(i).getName();
             // field name length is up to 10 characters, and is terminated with a NULL character
             char[] fieldNamePadded = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
-            char[] fieldNameNoPadding = value.substring(value.length() - _fields.get(i).getName().length()).toCharArray();
+            char[] fieldNameNoPadding = value.substring(value.length() - fields.get(i).getName().length()).toCharArray();
             System.arraycopy(fieldNameNoPadding, 0, fieldNamePadded, 0, fieldNameNoPadding.length);
-            dbfFile.write8bitChars(fieldNamePadded);
+            dbfFileWriter.write8bitChars(fieldNamePadded);
 
             // write the field type
-            dbfFile.write8bitChar((char) _fields.get(i).getColumnTypeChar());
+            dbfFileWriter.write8bitChar(fields.get(i).getColumnTypeChar());
 
             // write the field data address, offset from the start of the record
-            dbfFile.writeLittleEndianInt(_fields.get(i).getDataAddress());
+            dbfFileWriter.writeLittleEndianInt(fields.get(i).getDataAddress());
 
             // write the length of the field.
             // if char field is longer than 255 bytes, then we use the decimal field as part of the field length.
-            if (_fields.get(i).getColumnType() == DbfColumn.DbfColumnType.CHARACTER && _fields.get(i).getLength() > 255) {
+            if (fields.get(i).getColumnType() == DbfColumn.DbfColumnType.CHARACTER && fields.get(i).getLength() > 255) {
                 // treat decimal count as high byte of field length, this extends char field max to 65535
-                dbfFile.writeLittleEndianShort((short) _fields.get(i).getLength());
+                dbfFileWriter.writeLittleEndianShort((short) fields.get(i).getLength());
             } else {
                 // write the length of the field.
-                dbfFile.write((byte) _fields.get(i).getLength());
+                dbfFileWriter.write((byte) fields.get(i).getLength());
 
                 // write the decimal count.
-                dbfFile.write((byte) _fields.get(i).getDecimalCount());
+                dbfFileWriter.write((byte) fields.get(i).getDecimalCount());
             }
 
             // write the reserved bytes.
-            dbfFile.write(byteReserved);
+            dbfFileWriter.write(byteReserved);
         }
 
         // write the end of the field definitions marker
-        dbfFile.write((byte) 0x0D);
+        dbfFileWriter.write((byte) 0x0D);
 
-        // clear dirty bit
-        _isDirty = false;
+        // Clear dirty bit.
+        isDirty = false;
 
-        // lock the header so it cannot be modified any longer,
-        // we could actually postpone this until first record is written!
-        _locked = true;
+        // Lock the header so it cannot be modified any longer.
+        locked = true; // We could actually postpone this until first record is written.
     }
 
     /**
@@ -544,53 +519,52 @@ public class DbfHeader implements Cloneable {
      * When this function is done the position will be the first record.
      *
      * @param dbfFile little endian reader
-     * @throws IOException
-     * @throws Exception
+     * @throws IOException if an I/O error occurs.
+     * @throws InvalidDbfFileException If the DBF file is not valid.
      */
-    public void read(com.socialexplorer.util.FileReader dbfFile) throws IOException, Exception {
-        // type of reader.
-        int nFileType = dbfFile.readByte();
-
-        if (nFileType != 0x03) {
-            throw new Exception("Unsupported DBF reader Type " + nFileType);
+    public void read(com.socialexplorer.util.FileReader dbfFile) throws IOException, InvalidDbfFileException {
+        // Type of reader
+        int fileType = dbfFile.readByte();
+        if (fileType != 0x03) {
+            throw new InvalidDbfFileException("Unsupported DBF reader Type " + fileType);
         }
 
-        // parse the update date information
+        // Update date
         int year = (int) dbfFile.readByte();
         int month = (int) dbfFile.readByte();
         int day = (int) dbfFile.readByte();
         Calendar cal = Calendar.getInstance();
         cal.set(year + 1900, month, day);
-        _updateDate = cal.getTime();
+        updateDate = cal.getTime();
 
-        // read the number of records
+        // Number of records
         int numRecordsInt = dbfFile.readLittleEndianInt(); // signed integer
-        _numRecords = ByteUtils.getUnsigned(numRecordsInt); // unsigned long
+        numberOfRecords = ByteUtils.getUnsigned(numRecordsInt); // unsigned long
 
-        // read the length of the header structure.
-        _headerLength = dbfFile.readLittleEndianShort();               // TODO
+        // Length of the header structure
+        headerLength = dbfFile.readLittleEndianUnsignedShort();
 
-        // read the length of a record
-        _recordLength = dbfFile.readLittleEndianShort();
+        // Length of a record
+        recordLength = dbfFile.readLittleEndianShort();
 
         // Skip everything till the language driver ID.
         dbfFile.skipBytes(17);
 
-        // Read the language driver ID.
+        // Language driver ID.
         languageDriverId = dbfFile.readByte();
         tryToSetEncoding();
 
         // Skip two reserved bytes (30. and 31. byte).
         dbfFile.skipBytes(2);
 
-        // calculate the number of fields in the header
-        int nNumFields = (_headerLength - fileDescriptorSize) / columnDescriptorSize;
+        // Calculate the number of fields in the header
+        int nNumFields = (headerLength - fileDescriptorSize) / columnDescriptorSize;
 
-        // offset from start of record, start at 1 because that's the delete flag.
-        int nDataOffset = 1;
+        // Offset from start of record, start at 1 because that's the delete flag
+        int dataOffset = 1;
 
-        // read all of the header records
-        _fields = new ArrayList<DbfColumn>(nNumFields);
+        // Read all of the header records
+        fields = new ArrayList<DbfColumn>(nNumFields);
         for (int i = 0; i < nNumFields; i++) {
             /**
              * read the field name.
@@ -609,14 +583,14 @@ public class DbfHeader implements Cloneable {
             // if field type is char, then read FieldLength and Decimal count as one number to allow char fields to be
             // longer than 256 bytes (ASCII char). This is the way Clipper and FoxPro do it, and there is really no downside
             // since for char fields decimal count should be zero for other versions that do not support this extended functionality.\
-            int nFieldLength = 0;
+            int fieldLength = 0;
             int nDecimals = 0;
             if (cDbaseType == 'C' || cDbaseType == 'c') {
                 //treat decimal count as high byte
-                nFieldLength = (int) dbfFile.readLittleEndianShort();
+                fieldLength = dbfFile.readLittleEndianShort();
             } else {
                 //read field length as an unsigned byte.
-                nFieldLength = (int) dbfFile.readByte();
+                fieldLength = (int) dbfFile.readByte();
 
                 //read decimal count as one byte
                 nDecimals = (int) dbfFile.readByte();
@@ -626,53 +600,54 @@ public class DbfHeader implements Cloneable {
             dbfFile.skipBytes(14);
 
             // create and add field to collection
-            _fields.add(new DbfColumn(sFieldName, DbfColumn.getDbaseType(cDbaseType), nFieldLength, nDecimals, nDataOffset));
+            fields.add(new DbfColumn(sFieldName, DbfColumn.getDbaseType(cDbaseType), fieldLength, nDecimals, dataOffset));
 
             // add up address information, you can not trust the address recorded in the DBF file...
-            nDataOffset += nFieldLength;
+            dataOffset += fieldLength;
         }
 
         // Last byte is a marker for the end of the field definitions.
         dbfFile.skipBytes(1);
 
         // read any extra header bytes... move to first record
-        // equivalent to reader.BaseStream.Seek(_headerLength, SeekOrigin.Begin) except that we are not using the seek function since
+        // equivalent to reader.BaseStream.Seek(headerLength, SeekOrigin.Begin) except that we are not using the seek function since
         // we need to support streams that can not seek like web connections.
-        int nExtraReadBytes = _headerLength - (fileDescriptorSize + (columnDescriptorSize * _fields.size()));
-        if (nExtraReadBytes > 0) {
-            dbfFile.skipBytes(nExtraReadBytes);
+        int extraReadBytes = headerLength - (fileDescriptorSize + (columnDescriptorSize * fields.size()));
+        if (extraReadBytes > 0) {
+            dbfFile.skipBytes(extraReadBytes);
         }
 
-        /* if the stream is not forward-only, calculate number of records using file size,
-            sometimes the header does not contain the correct record count
-            if we are reading the file from the web, we have to use readNext() functions anyway so
-            Number of records is not so important and we can trust the DBF to have it stored correctly. */
-        if (_numRecords == 0) {
+        //if the stream is not forward-only, calculate number of records using file size,
+        //sometimes the header does not contain the correct record count
+        //if we are reading the file from the web, we have to use readNext() functions anyway so
+        //Number of records is not so important and we can trust the DBF to have it stored correctly.
+        if (numberOfRecords == 0) {
                 //notice here that we subtract file end byte which is supposed to be 0x1A,
                 //but some DBF files are incorrectly written without this byte, so we round off to nearest integer.
                 //that gives a correct result with or without ending byte.
-            if (_recordLength > 0) {
-                _numRecords = (long) Math.round(((double) (dbfFile.length() - _headerLength - 1) / _recordLength));
+            if (recordLength > 0) {
+                numberOfRecords = Math.round(((double) (dbfFile.length() - headerLength - 1) / recordLength));
             }
         }
 
-        // lock header since it was read from a file. we don't want it modified because that would corrupt the file.
-        // user can override this lock if really necessary by calling UnLock() method.
-        _locked = true;
+        // Lock header since it was read from a file. we don't want it modified because that would corrupt the file.
+        // User can override this lock if really necessary by calling #unlock() method.
+        locked = true;
 
-        // clear dirty bit
-        _isDirty = false;
+        // Clear dirty bit
+        isDirty = false;
     }
 
-    private void tryToSetEncoding() throws UnsupportedEncodingException {
+    /**
+     * Try to set encoding using the byte in the language driver ID. Encoding will be set if the byte contains
+     * valid encoding data and if the encoding has not been externally force (e.g. through a CPG file). If the
+     * language driver ID does not contain valid encoding, default encoding will be used.
+     */
+    private void tryToSetEncoding() {
         String encoding = DbfEncodings.getCodePageFromLanguageId(languageDriverId);
         if (encoding != null && Charset.isSupported(encoding) && Configuration.getShouldTryToSetEncodingFromLanguageDriver()) {
             Configuration.setEncodingName(encoding);
         } // leave default value otherwise
-    }
-
-    public Object clone() throws CloneNotSupportedException {
-        return this.clone();
     }
 }
 

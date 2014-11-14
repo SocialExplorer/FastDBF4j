@@ -3,18 +3,18 @@ package com.socialexplorer.util;
 import java.io.*;
 
 public class ByteUtils {
-    public static byte[] int2byte(int integ) throws IOException {
-        ByteArrayOutputStream baos = new ByteArrayOutputStream(Integer.SIZE/8);
-        DataOutputStream dos = new DataOutputStream(baos);
-        dos.writeInt(integ);
-        byte[] result = baos.toByteArray();
+    public static byte[] int2byte(int intValue) throws IOException {
+        ByteArrayOutputStream outStream = new ByteArrayOutputStream(Integer.SIZE/8);
+        DataOutputStream dos = new DataOutputStream(outStream);
+        dos.writeInt(intValue);
+        byte[] result = outStream.toByteArray();
         dos.close();
         return result;
     }
 
     public static int byte2int(byte[] b) throws IOException {
-        ByteArrayInputStream baos = new ByteArrayInputStream(b);
-        DataInputStream dos = new DataInputStream(baos);
+        ByteArrayInputStream outStream = new ByteArrayInputStream(b);
+        DataInputStream dos = new DataInputStream(outStream);
         int result = dos.readInt();
         dos.close();
         return result;

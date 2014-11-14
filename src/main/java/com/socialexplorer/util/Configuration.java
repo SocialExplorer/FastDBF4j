@@ -1,12 +1,5 @@
 package com.socialexplorer.util;
 
-/**
- * Created with IntelliJ IDEA.
- * User: Maida
- * Date: 11/12/14
- * Time: 11:47 AM
- * To change this template use File | Settings | File Templates.
- */
 public class Configuration {
     /**
      * Encoding to be used if it is not provided by the user and the encoding written in DBF language driver

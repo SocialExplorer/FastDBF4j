@@ -1,5 +1,6 @@
 package com.socialexplorer.fastDBF4j;
 
+import com.socialexplorer.fastDBF4j.exceptions.InvalidDbfFileException;
 import com.socialexplorer.util.Configuration;
 import com.socialexplorer.util.FileReader;
 
@@ -25,42 +26,69 @@ import java.util.List;
  */
 public class DbfFile {
     /**
-     * Helps read/write dbf file header information.
+     * Header object that helps read/write dbf file header information.
      */
-    protected DbfHeader _header = new DbfHeader();
-
+    protected DbfHeader header = new DbfHeader();
     /**
-     * Flag that indicates whether the header was written or not...
+     * Flag that indicates whether the header was written or not.
      */
-    protected boolean _headerWritten = false;
-
+    protected boolean headerWritten = false;
     /**
-     * input and output stream
+     * File reader/writer.
      */
-    protected FileReader _dbfFile = null;
-
+    protected FileReader dbfFile = null;
     /**
      * Path to the file, if the file was opened at all.
      */
-    protected String _fileName = "";
-
+    protected String filePath = "";
     /**
      * Number of records read using readNext() methods only. This applies only when we are using a forward-only stream.
-     * _recordsReadCount is used to keep track of record index. With a seek enabled stream,
+     * recordsReadCount is used to keep track of record index. With a seek enabled stream,
      * we can always calculate index using stream position.
      */
-    protected int _recordsReadCount = 0;
+    protected int recordsReadCount = 0;
+    /**
+     * The file can be read in forward direction only.
+     * Keep isForwardOnly handy so we don't call functions on every read.
+     */
+    protected boolean isForwardOnly = false;
+    /**
+     * The file cannot be written to.
+     * Keep isReadOnly handy so we don't call functions on every read.
+     */
+    protected boolean isReadOnly = false;
+    /**
+     * "r" - Read-only, "rw" - Read/write
+     */
+    protected String fileAccess = "";
 
     /**
-     * keep these values handy so we don't call functions on every read.
+     * Initialize DBF file.
+     * @param filePath Path to the file.
+     * @param fileAccess "r" for read-only or "rw" for read/write.
+     * @param encodingName Encoding to be used for reading the file.
+     * @param shouldTryToSetEncodingFromLanguageDriver True if the encoding should be read from the DBF's language
+     *                                                 driver that is written in the header, false otherwise.
+     *                                                 If true and the encoding cannot be read from the DBF's header,
+     *                                                 windows-1252 is used as default.
+     * @exception IllegalArgumentException If file access is neither 'r' nor 'rw'
+     * @exception UnsupportedCharsetException If the encoding provided in the cpg file is not valid or not supported.
      */
-    protected boolean _isForwardOnly = false;
-    protected boolean _isReadOnly = false;
+    private void initialize(String filePath, String fileAccess, String encodingName, boolean shouldTryToSetEncodingFromLanguageDriver) {
+        this.filePath = filePath;
 
-    /**
-     * "r", "rw"
-     */
-    protected String _fileAccess = "";
+        if (!(fileAccess.equals("r") || fileAccess.equals("rw"))) {
+            throw new IllegalArgumentException("File access must be either 'r' or 'rw'");
+        }
+        this.fileAccess = fileAccess;
+
+        Configuration.setShouldTryToSetEncodingFromLanguageDriver(shouldTryToSetEncodingFromLanguageDriver);
+
+        if (!Charset.isSupported(encodingName)) {
+            throw new UnsupportedCharsetException("Encoding :" + encodingName + " not supported!");
+        }
+        Configuration.setEncodingName(encodingName);
+    }
 
     /**
      * Creates a DBF file object. Since there is no cpg file provided in this constructor, encoding will be read from
@@ -70,25 +98,17 @@ public class DbfFile {
      * @param fileAccess read - "r", read/write - "rw"
      */
     public DbfFile(String filePath, String fileAccess) {
-        _fileName = filePath;
-        _fileAccess = fileAccess;
-
-        Configuration.setEncodingName(Configuration.DEFAULT_ENCODING_NAME);
-        Configuration.setShouldTryToSetEncodingFromLanguageDriver(true);
+        initialize(filePath, fileAccess, Configuration.DEFAULT_ENCODING_NAME, true);
     }
 
     /**
      * @param filePath Full path to the file.
      * @param fileAccess read - "r", read/write - "rw"
      * @param cpgFilePath Path to the CPG file that contains encoding information on the first line.
-     * @throws UnsupportedCharsetException If the encoding provided in the cpg file is not valid or not supported.
+     * @exception IllegalArgumentException If the CPG file is empty.
      * @throws IOException If the cpg file cannot be read.
-     * @throws IllegalArgumentException If the CPG file is empty.
      */
-    public DbfFile(String filePath, String fileAccess, String cpgFilePath) throws UnsupportedCharsetException, IOException {
-        _fileName = filePath;
-        _fileAccess = fileAccess;
-
+    public DbfFile(String filePath, String fileAccess, String cpgFilePath) throws IOException {
         // Read cpg file
         List<String> lines = Files.readAllLines(Paths.get(cpgFilePath), StandardCharsets.UTF_8);
         if (lines.size() == 0) {
@@ -97,121 +117,113 @@ public class DbfFile {
         // Encoding should be on the first line.
         String encodingName = lines.get(0);
 
-        // Set encoding to that given in cpg file, if possible.
-        if (!Charset.isSupported(encodingName)) {
-            throw new UnsupportedCharsetException("Encoding :" + encodingName + " not supported!");
-        }
-        Configuration.setEncodingName(encodingName);
-        Configuration.setShouldTryToSetEncodingFromLanguageDriver(false);
+        initialize(filePath, fileAccess, encodingName, false);
     }
 
     /**
      * Open a DBF file or create a new one.
-     *
-     * @throws IOException
-     * @throws FileNotFoundException
-     * @throws Exception
+     * @throws FileNotFoundException true if the file path is invalid.
+     * @throws InvalidDbfFileException If the DBF file is not valid.
      */
-    public void open() throws IOException, FileNotFoundException, Exception {
-        _recordsReadCount = 0; // reset position
-        _headerWritten = false; // assume the header is not written
-        _isForwardOnly = false; // RandomAccessFile can seek
-        _isReadOnly = (_fileAccess.equals("r"));
+    public void open() throws IOException, InvalidDbfFileException {
+        recordsReadCount = 0; // reset position
+        headerWritten = false; // assume the header is not written
+        isForwardOnly = false; // RandomAccessFile can seek TODO check if this is needed
+        isReadOnly = (fileAccess.equals("r"));
 
-        _dbfFile = new com.socialexplorer.util.FileReader(new RandomAccessFile(_fileName, _fileAccess));
+        dbfFile = new com.socialexplorer.util.FileReader(new RandomAccessFile(filePath, fileAccess)); // TODO move package
 
         // read the header
-        if (_fileAccess.contains("r")) {
-            try {
-                _header.read(_dbfFile);
-                _headerWritten = true;
-            } catch (EOFException e) {
-                // could not read the header because file is empty
-                _header = new DbfHeader();
-                _headerWritten = false;
-            }
+        try {
+            header.read(dbfFile);
+            headerWritten = true;
+        } catch (EOFException e) {
+            // could not read the header because file is empty
+            header = new DbfHeader();
+            headerWritten = false;
         }
     }
 
     /**
-     * Update header info, flush buffers and close streams. You should always call this method when you are done with a DBF file.
-     *
-     * @throws IOException
-     * @throws Exception
+     * Update header info, flush buffers and close streams. This method should always be called
+     * when done working with a DBF file.
+     * @throws IOException  if an I/O error occurs.
      */
-    public void close() throws IOException, Exception {
-        // try to update the header if it has changed
-        if (_header.getIsDirty()) {
+    public void close() throws IOException {
+        // Try to update the header if it has changed.
+        if (header.getIsDirty()) {
             writeHeader();
         }
 
-        // empty header
-        _header = new DbfHeader();
-        _headerWritten = false;
+        // Create an empty header.
+        header = new DbfHeader();
+        headerWritten = false;
 
-        // reset current record index
-        _recordsReadCount = 0;
+        // Reset current record index.
+        recordsReadCount = 0;
 
-        // close stream
-        if (_dbfFile != null) {
-            _dbfFile.close();
+        // Close file.
+        if (dbfFile != null) {
+            dbfFile.close();
         }
-        _dbfFile = null;
+        dbfFile = null;
 
-        _fileName = "";
+        filePath = "";
     }
 
     /**
-     * @return true if we cannot write to the DBF file stream, false otherwise
+     * @return true if DBF file cannot be written to, false otherwise.
      */
     public boolean isReadOnly() {
-        return _isReadOnly;
+        return isReadOnly;
     }
 
     /**
-     * @return true if we cannot seek to different locations within the file, such as internet connections, false otherwise
+     * @return true if seeking is not possible, false otherwise TODO check if necessary
      */
     public boolean isForwardOnly() {
-        return _isForwardOnly;
+        return isForwardOnly;
     }
 
     /**
-     * @return the name of the file stream
+     * @return The name of the file path.
      */
-    public String getFileName() {
-        return _fileName;
+    public String getFilePath() {
+        return filePath;
     }
 
     /**
      * Read next record and fill data into parameter _fillRecord.
-     *
      * @param fillRecord DbfRecord object into which the record is stored
      * @return true if a record was read, false otherwise
-     * @throws Exception
+     * @exception IllegalStateException If the file reader/writer is null.
+     * @exception IllegalStateException If the size of the record does not match the size written in header.
+     * @throws IOError If an I/O error occurs.
      */
-    public boolean readNext(DbfRecord fillRecord) throws Exception {
+    public boolean readNext(DbfRecord fillRecord) throws IOException {
         // check if we can fill this record with data. it must match record size specified by header and number of columns.
         // we are not checking whether it comes from another DBF file or not, we just need the same structure. Allow flexibility but be safe.
-        if (fillRecord.getHeader() != _header && (fillRecord.getHeader().getColumnCount() != _header.getColumnCount() || fillRecord.getHeader().getRecordLength() != _header.getRecordLength()))
-            throw new Exception("Record parameter does not have the same size and number of columns as the " +
-                                "header specifies, so we are unable to read a record into oFillRecord. " +
+        if (fillRecord.getHeader() != header && (fillRecord.getHeader().getColumnCount() != header.getColumnCount() || fillRecord.getHeader().getRecordLength() != header.getRecordLength()))
+            throw new IllegalStateException("Record parameter does not have the same size and number of columns as the " +
+                                "header specifies, so we are unable to read a record into fillRecord. " +
                                 "This is a programming error, have you mixed up DBF file objects?");
 
         // DBF file reader can be null if stream is not readable.
-        if (_dbfFile == null)
-            throw new Exception("Read stream is null, either you have opened a stream that can not be " +
+        if (dbfFile == null) {
+            throw new IllegalStateException("Read stream is null, either you have opened a stream that can not be " +
                                 "read from (a write-only stream) or you have not opened a stream at all.");
+        }
 
         // read next record...
-        boolean readSuccess = fillRecord.read(_dbfFile);
+        boolean readSuccess = fillRecord.read(dbfFile);
 
         if (readSuccess) {
-            if (_isForwardOnly) {
+            if (isForwardOnly) {
                 // zero based index! set before incrementing count.
-                fillRecord.setRecordIndex(_recordsReadCount);
-                _recordsReadCount++;
+                fillRecord.setRecordIndex(recordsReadCount);
+                recordsReadCount++;
             } else {
-                fillRecord.setRecordIndex(((int) ((_dbfFile.getFilePointer() - _header.HeaderLength()) / _header.getRecordLength())) - 1);
+                fillRecord.setRecordIndex(((int) ((dbfFile.getFilePointer() - header.HeaderLength()) / header.getRecordLength())) - 1);
             }
         }
 
@@ -222,11 +234,12 @@ public class DbfFile {
      * Reads the next record.
      *
      * @return a new record object or null if nothing was read
-     * @throws Exception
+     * @throws UnsupportedEncodingException If the encoding is not valid or is not supported.
+     * @throws IOException If an I/O error occurs.
      */
-    public DbfRecord readNext() throws Exception {
+    public DbfRecord readNext() throws IOException {
         // create a new record and fill it
-        DbfRecord nextRecord = new DbfRecord(_header);
+        DbfRecord nextRecord = new DbfRecord(header);
 
         if (readNext(nextRecord)) {
             return nextRecord;
@@ -246,37 +259,39 @@ public class DbfFile {
      *                   It does not have to come from the same header, but it must match the structure. We are not going as far as to check size of each field.
      *                   The idea is to be flexible but safe. It's a fine balance, these two are almost always at odds.
      * @return True if read a record was read, otherwise false. If you read end of file false will be returned and fillRecord will NOT be modified!
-     * @throws Exception
+     * @throws IOException If an I/O error occurs.
+     * @exception IllegalStateException If the DBF reader/writer is null.
+     * @exception IllegalStateException If the size of the record does not match the size written in header.
      */
-    public boolean read(int index, DbfRecord fillRecord) throws Exception {
+    public boolean read(int index, DbfRecord fillRecord) throws IOException {
         // check if we can fill this record with data. it must match record size specified by header and number of columns.
         // we are not checking whether it comes from another DBF file or not, we just need the same structure. Allow flexibility but be safe.
-        if (fillRecord.getHeader() != _header && (fillRecord.getHeader().getColumnCount() != _header.getColumnCount() || fillRecord.getHeader().getRecordLength() != _header.getRecordLength()))
-            throw new Exception("Record parameter does not have the same size and number of columns as the " +
+        if (fillRecord.getHeader() != header && (fillRecord.getHeader().getColumnCount() != header.getColumnCount() || fillRecord.getHeader().getRecordLength() != header.getRecordLength()))
+            throw new IllegalStateException("Record parameter does not have the same size and number of columns as the " +
                                 "header specifies, so we are unable to read a record into oFillRecord. " +
                                 "This is a programming error, have you mixed up DBF file objects?");
 
         // DBF file reader can be null if stream is not readable...
-        if (_dbfFile == null)
-            throw new Exception("ReadStream is null, either you have opened a stream that can not be " +
+        if (dbfFile == null)
+            throw new IllegalStateException("DBF reader/writer is null, either you have opened a stream that can not be " +
                                 "read from (a write-only stream) or you have not opened a stream at all.");
 
 
-        // move to the specified record, note that an exception will be thrown is stream is not seekable!
+        // Move to the specified record, note that an exception will be thrown is stream is not seekable!
         // This is ok, since we provide a function to check whether the stream is seekable.
-        long seekToPosition = _header.HeaderLength() + (index * _header.getRecordLength());
+        long seekToPosition = header.HeaderLength() + (index * header.getRecordLength());
 
         // check whether requested record exists. Subtract 1 from file length (there is a terminating character 1A at the end of the file)
         // so if we hit end of file, there are no more records, so return false;
-        if (index < 0 || _dbfFile.length() - 1 <= seekToPosition) {
+        if (index < 0 || dbfFile.length() - 1 <= seekToPosition) {
             return false;
         }
 
         // move to record and read
-        _dbfFile.seek(seekToPosition);
+        dbfFile.seek(seekToPosition);
 
         // read the record
-        boolean readRecord = fillRecord.read(_dbfFile);
+        boolean readRecord = fillRecord.read(dbfFile);
         if (readRecord) {
             fillRecord.setRecordIndex(index);
         }
@@ -290,11 +305,12 @@ public class DbfFile {
      *
      * @param index Zero based index.
      * @return Null if record can not be read, otherwise returns a new record.
-     * @throws Exception
+     * @throws UnsupportedEncodingException If the encoding is not valid or is not supported.
+     * @throws IOException If an I/O error occurs.
      */
-    public DbfRecord read(int index) throws Exception {
+    public DbfRecord read(int index) throws IOException {
         // create a new record and fill it.
-        DbfRecord record = new DbfRecord(_header);
+        DbfRecord record = new DbfRecord(header);
 
         if (read(index, record)) {
             return record;
@@ -305,33 +321,32 @@ public class DbfFile {
     }
 
     /***
-     * @param rowIndex
-     * @param columnIndex
-     * @param result
-     * @return
-     * @throws UnsupportedEncodingException
-     * @throws IOException
+     * @param rowIndex Index of the row.
+     * @param columnIndex Index of the column.
+     * @param result Value that has been read
+     * @return true if reading was successful, false otherwise
+     * @throws IOException If an I/O error occurs.
      */
-    public boolean readValue(int rowIndex, int columnIndex, StringBuilder result) throws UnsupportedEncodingException, IOException {
+    public boolean readValue(int rowIndex, int columnIndex, StringBuilder result) throws IOException {
         result.delete(0, result.length());
 
-        DbfColumn column = _header.get(columnIndex);
+        DbfColumn column = header.get(columnIndex);
 
         // move to the specified record, note that an exception will be thrown is stream is not seekable!
         // This is ok, since we provide a function to check whether the stream is seekable.
-        long nSeekToPosition = _header.HeaderLength() + (rowIndex * _header.getRecordLength()) + column.getDataAddress();
+        long nSeekToPosition = header.HeaderLength() + (rowIndex * header.getRecordLength()) + column.getDataAddress();
 
         // check whether requested record exists. Subtract 1 from file length (there is a terminating character 1A at the end of the file)
         // so if we hit end of file, there are no more records, so return false;
-        if (rowIndex < 0 || _dbfFile.length() - 1 <= nSeekToPosition)
+        if (rowIndex < 0 || dbfFile.length() - 1 <= nSeekToPosition)
             return false;
 
         // move to position and read
-        _dbfFile.seek(nSeekToPosition);
+        dbfFile.seek(nSeekToPosition);
 
         // read the value
         byte[] data = new byte[column.getLength()];
-        _dbfFile.read(data, 0, column.getLength());
+        dbfFile.read(data, 0, column.getLength());
 
         result.append(new String(data, 0, column.getLength(), Configuration.getEncodingName()));
 
@@ -342,23 +357,22 @@ public class DbfFile {
      * Write a record to file. If RecordIndex is present, record will be updated, otherwise a new record will be written.
      * Header will be output first if this is the first record being written to file.
      * This method does NOT require stream seek capability to add a new record.
-     *
      * @param record
-     * @throws Exception
+     * @throws IOException If an I/O error occurs.
      */
-    public void write(DbfRecord record) throws Exception {
+    public void write(DbfRecord record) throws IOException {
         // if header was never written, write it first, then output the record
-        if (!_headerWritten) {
+        if (!headerWritten) {
             writeHeader();
         }
 
         // if this is a new record (RecordIndex should be -1 in that case)
         if (record.getRecordIndex() < 0) {
-            if (!_isForwardOnly) {
+            if (!isForwardOnly) {
                 /* Calculate number of records in file. Do not rely on header's RecordCount property since client can change that value.
                    Also note that some DBF files do not have ending 0x1A byte, so we subtract 1 and round off,
                    instead of just cast since cast would just drop decimals. */
-                int nNumRecords = (int) Math.round(((double) (_dbfFile.length() - _header.HeaderLength() - 1) / _header.getRecordLength()));
+                int nNumRecords = (int) Math.round(((double) (dbfFile.length() - header.HeaderLength() - 1) / header.getRecordLength()));
 
                 if (nNumRecords < 0) {
                     nNumRecords = 0;
@@ -366,11 +380,11 @@ public class DbfFile {
 
                 record.setRecordIndex(nNumRecords);
                 update(record);
-                _header.setRecordCount(_header.getRecordCount() + 1);
+                header.setRecordCount(header.getRecordCount() + 1);
             } else {
                 // we can not position this stream, just write out the new record.
-                record.write(_dbfFile);
-                _header.setRecordCount(_header.getRecordCount() + 1);
+                record.write(dbfFile);
+                header.setRecordCount(header.getRecordCount() + 1);
             }
         } else {
             update(record);
@@ -380,13 +394,12 @@ public class DbfFile {
     /***
      * Write a record to file. If RecordIndex is present, record will be updated, otherwise a new record will be written.
      * Header will be output first if this is the first record being written to file.
-     * This method does NOT require stream seek capability to add a new record.
-     *
+     * This method does NOT require stream seek capability to add a new record.     *
      * @param record Record to be added or updated.
      * @param clearRecordAfterWrite Clear all data in the record or not.
-     * @throws Exception
+     * @throws IOException If an I/O error occurs.
      */
-    public void write(DbfRecord record, boolean clearRecordAfterWrite) throws Exception {
+    public void write(DbfRecord record, boolean clearRecordAfterWrite) throws IOException {
         write(record);
 
         if (clearRecordAfterWrite) {
@@ -400,70 +413,76 @@ public class DbfFile {
      * RecordIndex is set automatically when you call any read() methods on this class.
      *
      * @param record
-     * @throws Exception
+     * @exception IllegalArgumentException If record index is not set.
+     * @exception IllegalStateException If the DBF reader/writer is null.
+     * @exception IndexOutOfBoundsException If trying to seek after the end of file.
+     * @exception IllegalStateException If the size of the record does not match the size written in header.
+     * @throws IOException IOException if an I/O error occurs while reading the file.
      */
-    public void update(DbfRecord record) throws Exception {
+    public void update(DbfRecord record) throws IOException {
         // if header was never written, write it first, then output the record
-        if (!_headerWritten) {
+        if (!headerWritten) {
             writeHeader();
         }
 
-        // check if record has an index
+        // Check if record has an index
         if (record.getRecordIndex() < 0) {
-            throw new Exception("RecordIndex is not set, unable to update record. Set RecordIndex or call write() method to add a new record to file.");
+            throw new IllegalArgumentException("Record index is not set, unable to update record. " +
+                    "Set record index or call write() method to add a new record to file.");
         }
 
         // Check if this record matches record size specified by header and number of columns.
         // Client can pass a record from another DBF that is incompatible with this one and that would corrupt the file.
-        if (record.getHeader() != _header && (record.getHeader().getColumnCount() != _header.getColumnCount() || record.getHeader().getRecordLength() != _header.getRecordLength()))
-            throw new Exception("Record parameter does not have the same size and number of columns as the " +
+        if (record.getHeader() != header && (record.getHeader().getColumnCount() != header.getColumnCount()
+                                            || record.getHeader().getRecordLength() != header.getRecordLength()))
+            throw new IllegalStateException("Record parameter does not have the same size and number of columns as the " +
                                 "header specifies. Writing this record would corrupt the DBF file. " +
                                 "This is a programming error, have you mixed up DBF file objects?");
 
-        if (_dbfFile == null)
-            throw new Exception("Write stream is null. Either you have opened a stream that can not be " +
-                                "writen to (a read-only stream) or you have not opened a stream at all.");
+        if (dbfFile == null) {
+            throw new IllegalStateException("Write stream is null. Either a stream that can not be " +
+                                "written to is opened (a read-only stream) or a stream has not been opened at all.");
+        }
 
 
-        // move to the specified record, note that an exception will be thrown if stream is not seekable!
+        // Move to the specified record, note that an exception will be thrown if stream is not seekable!
         // This is ok, since we provide a function to check whether the stream is seekable.
-        long nSeekToPosition = (long) _header.HeaderLength() + (long) ((long) record.getRecordIndex() * (long) _header.getRecordLength());
+        long nSeekToPosition = (long) header.HeaderLength() + ((long) record.getRecordIndex() * (long) header.getRecordLength());
 
         //check whether we can seek to this position. Subtract 1 from file length (there is a terminating character 1A at the end of the file)
         //so if we hit end of file, there are no more records, so return false;
-        if (_dbfFile.length() < nSeekToPosition) {
-            throw new Exception("Invalid record position. Unable to save record.");
+        if (dbfFile.length() < nSeekToPosition) {
+            throw new IndexOutOfBoundsException("Invalid record position. Unable to save record.");
         }
 
         // move to record start
-        _dbfFile.seek(nSeekToPosition);
+        dbfFile.seek(nSeekToPosition);
 
         // write
-        record.write(_dbfFile);
+        record.write(dbfFile);
     }
 
     /**
      * Save header to file. Normally, you do not have to call this method, header is saved
-     * automatically and updated when you close the file (if it changed).
-     *
-     * @return
-     * @throws Exception
+     * automatically and updated when you close the file (if it has changed).
+     * @return true if the header has been written successfully, false otherwise
+     * @throws IOException IOException if an I/O error occurs while reading the file.
      */
-    public boolean writeHeader() throws Exception {
+    public boolean writeHeader() throws IOException {
         //update header if possible
         //--------------------------------
-        if (_dbfFile != null) {
-            if (!_isForwardOnly) {
-                _dbfFile.seek(0);
-                _header.write(_dbfFile);
-                _headerWritten = true;
+        if (dbfFile != null) {
+            if (!isForwardOnly) {
+                dbfFile.seek(0);
+                header.write(dbfFile);
+                headerWritten = true;
                 return true;
             } else {
                 //if stream can not seek, then just write it out and that's it.
-                if (!_headerWritten)  {
-                    _header.write(_dbfFile);
+                if (!headerWritten)  {
+                    header.write(dbfFile);
                 }
-                _headerWritten = true;
+                headerWritten = true;
             }
         }
 
@@ -472,12 +491,11 @@ public class DbfFile {
 
     /**
      * Access DBF header with information on columns. Use this object for faster access to header.
-     * Remove one layer of function calls by saving header reference and using it directly to access columns.
-     *
+     * Remove one layer of function calls by saving header reference and using it directly to access columns.            *
      * @return DBF header.
      */
     public DbfHeader getHeader() {
-        return _header;
+        return header;
     }
 
 }

@@ -7,7 +7,7 @@ To add FastDBF4j dependency in your project using maven, add this to the pom.xml
 		<dependency>
 			<groupId>com.socialexplorer</groupId>
 			<artifactId>fastdbf4j</artifactId>
-			<version>1.0.1</version>
+			<version>1.0.2</version>
 		</dependency>
 	</dependencies>
 
