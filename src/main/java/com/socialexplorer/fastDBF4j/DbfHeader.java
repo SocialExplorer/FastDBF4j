@@ -1,9 +1,9 @@
 package com.socialexplorer.fastDBF4j;
 
 import com.socialexplorer.fastDBF4j.exceptions.InvalidDbfFileException;
-import com.socialexplorer.util.ByteUtils;
-import com.socialexplorer.util.Configuration;
-import com.socialexplorer.util.FileReader;
+import com.socialexplorer.fastDBF4j.util.ByteUtils;
+import com.socialexplorer.fastDBF4j.util.Configuration;
+import com.socialexplorer.fastDBF4j.util.FileReader;
 
 import java.io.IOException;
 import java.io.UnsupportedEncodingException;
@@ -522,7 +522,7 @@ public class DbfHeader {
      * @throws IOException if an I/O error occurs.
      * @throws InvalidDbfFileException If the DBF file is not valid.
      */
-    public void read(com.socialexplorer.util.FileReader dbfFile) throws IOException, InvalidDbfFileException {
+    public void read(FileReader dbfFile) throws IOException, InvalidDbfFileException {
         // Type of reader
         int fileType = dbfFile.readByte();
         if (fileType != 0x03) {

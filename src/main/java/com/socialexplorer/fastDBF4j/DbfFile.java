@@ -1,8 +1,8 @@
 package com.socialexplorer.fastDBF4j;
 
 import com.socialexplorer.fastDBF4j.exceptions.InvalidDbfFileException;
-import com.socialexplorer.util.Configuration;
-import com.socialexplorer.util.FileReader;
+import com.socialexplorer.fastDBF4j.util.Configuration;
+import com.socialexplorer.fastDBF4j.util.FileReader;
 
 import java.io.*;
 import java.nio.charset.Charset;
@@ -131,7 +131,7 @@ public class DbfFile {
         isForwardOnly = false; // RandomAccessFile can seek TODO check if this is needed
         isReadOnly = (fileAccess.equals("r"));
 
-        dbfFile = new com.socialexplorer.util.FileReader(new RandomAccessFile(filePath, fileAccess)); // TODO move package
+        dbfFile = new com.socialexplorer.fastDBF4j.util.FileReader(new RandomAccessFile(filePath, fileAccess)); // TODO move package
 
         // read the header
         try {

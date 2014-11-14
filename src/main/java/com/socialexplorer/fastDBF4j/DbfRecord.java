@@ -1,9 +1,9 @@
 package com.socialexplorer.fastDBF4j;
 
 import com.socialexplorer.fastDBF4j.exceptions.DbfDataTruncateException;
-import com.socialexplorer.util.ByteUtils;
-import com.socialexplorer.util.Configuration;
-import com.socialexplorer.util.FileReader;
+import com.socialexplorer.fastDBF4j.util.ByteUtils;
+import com.socialexplorer.fastDBF4j.util.Configuration;
+import com.socialexplorer.fastDBF4j.util.FileReader;
 import org.apache.commons.lang.NotImplementedException;
 
 import java.io.IOException;

@@ -1,4 +1,4 @@
-package com.socialexplorer.util;
+package com.socialexplorer.fastDBF4j.util;
 
 import java.io.IOException;
 import java.io.RandomAccessFile;
