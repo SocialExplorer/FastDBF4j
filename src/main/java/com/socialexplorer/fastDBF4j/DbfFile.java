@@ -5,13 +5,23 @@ import com.socialexplorer.util.FileReader;
 
 import java.io.*;
 import java.nio.charset.Charset;
+import java.nio.charset.StandardCharsets;
 import java.nio.charset.UnsupportedCharsetException;
+import java.nio.file.Files;
+import java.nio.file.Paths;
+import java.util.List;
 
 /**
  * This class represents a DBF file. You can create new, open, update and save DBF files using this class and supporting classes.
  * Also, this class supports reading/writing from/to an internet forward only type of stream!
  * TODO: add end of file byte '0x1A' !!!
  * We don't rely on that byte at all, and everything works with or without that byte, but it should be there by spec.
+ *
+ * TODO
+ * Forbid file editing if the encoding is UTF-8 since column width is variable in that case.
+ * It would be a pain in the ass to modify the header to fix column size. Also all values after
+ * that column would have to be shifted in case a more-than-one byte character appears..
+
  */
 public class DbfFile {
     /**
@@ -52,16 +62,42 @@ public class DbfFile {
      */
     protected String _fileAccess = "";
 
-    public DbfFile() {
+    /**
+     * Creates a DBF file object. Since there is no cpg file provided in this constructor, encoding will be read from
+     * the dbf language driver ID. If there is no data in the language driver ID, windows-1252 will be used as default.
+     *
+     * @param filePath Full path to the file.
+     * @param fileAccess read - "r", read/write - "rw"
+     */
+    public DbfFile(String filePath, String fileAccess) {
+        _fileName = filePath;
+        _fileAccess = fileAccess;
+
         Configuration.setEncodingName(Configuration.DEFAULT_ENCODING_NAME);
         Configuration.setShouldTryToSetEncodingFromLanguageDriver(true);
     }
 
     /**
-     * Force the reader to use the provided charset encoding.
-     * @param encodingName Encoding name.
+     * @param filePath Full path to the file.
+     * @param fileAccess read - "r", read/write - "rw"
+     * @param cpgFilePath Path to the CPG file that contains encoding information on the first line.
+     * @throws UnsupportedCharsetException If the encoding provided in the cpg file is not valid or not supported.
+     * @throws IOException If the cpg file cannot be read.
+     * @throws IllegalArgumentException If the CPG file is empty.
      */
-    public DbfFile(String encodingName) {
+    public DbfFile(String filePath, String fileAccess, String cpgFilePath) throws UnsupportedCharsetException, IOException {
+        _fileName = filePath;
+        _fileAccess = fileAccess;
+
+        // Read cpg file
+        List<String> lines = Files.readAllLines(Paths.get(cpgFilePath), StandardCharsets.UTF_8);
+        if (lines.size() == 0) {
+            throw new IllegalArgumentException("CPG file is empty. File path: " + cpgFilePath);
+        }
+        // Encoding should be on the first line.
+        String encodingName = lines.get(0);
+
+        // Set encoding to that given in cpg file, if possible.
         if (!Charset.isSupported(encodingName)) {
             throw new UnsupportedCharsetException("Encoding :" + encodingName + " not supported!");
         }
@@ -72,21 +108,17 @@ public class DbfFile {
     /**
      * Open a DBF file or create a new one.
      *
-     * @param sPath Full path to the file.
-     * @param fileAccess read - "r", read/write - "rw"
      * @throws IOException
      * @throws FileNotFoundException
      * @throws Exception
      */
-    public void open(String sPath, String fileAccess) throws IOException, FileNotFoundException, Exception {
+    public void open() throws IOException, FileNotFoundException, Exception {
         _recordsReadCount = 0; // reset position
         _headerWritten = false; // assume the header is not written
-        _fileName = sPath;
-        _fileAccess = fileAccess;
         _isForwardOnly = false; // RandomAccessFile can seek
         _isReadOnly = (_fileAccess.equals("r"));
 
-        _dbfFile = new com.socialexplorer.util.FileReader(new RandomAccessFile(sPath, fileAccess));
+        _dbfFile = new com.socialexplorer.util.FileReader(new RandomAccessFile(_fileName, _fileAccess));
 
         // read the header
         if (_fileAccess.contains("r")) {
@@ -99,19 +131,6 @@ public class DbfFile {
                 _headerWritten = false;
             }
         }
-    }
-
-    /**
-     * Creates a new DBF 4 file. Overwrites if file exists! Use open() function for more options.
-     *
-     * @param sPath
-     * @throws IOException
-     * @throws FileNotFoundException
-     * @throws Exception
-     */
-    public void create(String sPath) throws IOException, FileNotFoundException, Exception {
-        open(sPath, "rw");
-        _headerWritten = false;
     }
 
     /**
