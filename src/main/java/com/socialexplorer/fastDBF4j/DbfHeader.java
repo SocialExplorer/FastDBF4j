@@ -201,7 +201,7 @@ public class DbfHeader {
      *
      * @return
      */
-    public int HeaderLength() {
+    public int headerLength() {
         return headerLength;
     }
 
@@ -440,7 +440,6 @@ public class DbfHeader {
      * @throws IOException  if an I/O error occurs.
      */
     public void write(FileReader dbfFileWriter) throws IOException {
-
         // write the header
         // write the output file type.
         dbfFileWriter.writeByte((byte) fileType);

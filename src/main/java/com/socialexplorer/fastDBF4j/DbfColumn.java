@@ -191,7 +191,7 @@ public class DbfColumn implements Cloneable {
      * @param dataAddress offset from start of record
      * @throws IllegalArgumentException If this constructor is used to create number or character field types.
      */
-    DbfColumn(String name, DbfColumnType type, int length, int decimalPlaces, int dataAddress) {
+    public DbfColumn(String name, DbfColumnType type, int length, int decimalPlaces, int dataAddress) {
         this(name, type, length, decimalPlaces);
         this.dataAddress = dataAddress;
     }

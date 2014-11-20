@@ -3,13 +3,17 @@ package com.socialexplorer.fastDBF4j;
 import com.socialexplorer.fastDBF4j.exceptions.InvalidDbfFileException;
 import com.socialexplorer.fastDBF4j.util.Configuration;
 import com.socialexplorer.fastDBF4j.util.FileReader;
+import org.apache.commons.io.FileUtils;
+import org.apache.commons.io.FilenameUtils;
 
 import java.io.*;
 import java.nio.charset.Charset;
+import java.nio.charset.CharsetEncoder;
 import java.nio.charset.StandardCharsets;
 import java.nio.charset.UnsupportedCharsetException;
 import java.nio.file.Files;
 import java.nio.file.Paths;
+import java.util.Collection;
 import java.util.List;
 
 /**
@@ -18,8 +22,7 @@ import java.util.List;
  * TODO: add end of file byte '0x1A' !!!
  * We don't rely on that byte at all, and everything works with or without that byte, but it should be there by spec.
  *
- * TODO
- * Forbid file editing if the encoding is UTF-8 since column width is variable in that case.
+ * TODO Forbid file editing if the encoding is UTF-8 since column width is variable in that case.
  * It would be a pain in the ass to modify the header to fix column size. Also all values after
  * that column would have to be shifted in case a more-than-one byte character appears..
 
@@ -77,17 +80,28 @@ public class DbfFile {
     private void initialize(String filePath, String fileAccess, String encodingName, boolean shouldTryToSetEncodingFromLanguageDriver) {
         this.filePath = filePath;
 
-        if (!(fileAccess.equals("r") || fileAccess.equals("rw"))) {
-            throw new IllegalArgumentException("File access must be either 'r' or 'rw'");
-        }
-        this.fileAccess = fileAccess;
-
         Configuration.setShouldTryToSetEncodingFromLanguageDriver(shouldTryToSetEncodingFromLanguageDriver);
 
         if (!Charset.isSupported(encodingName)) {
             throw new UnsupportedCharsetException("Encoding :" + encodingName + " not supported!");
         }
         Configuration.setEncodingName(encodingName);
+
+        if (!(fileAccess.equals("r") || fileAccess.equals("rw"))) {
+            throw new IllegalArgumentException("File access must be either 'r' or 'rw'");
+        } else if (fileAccess.equals("rw")) {
+            Charset charset = Charset.forName(encodingName);
+            CharsetEncoder charsetEncoder = charset.newEncoder();
+
+            // Forbid editing of this file since the byte length of each encoded character is variable (e.g. UTF-8)
+            // and editing a record could mess up the DBF if record size changes (if it contains more bytes due to editing).
+            // This feature could be supported in the future, but for now simply forbid editing. TODO
+            if (charsetEncoder.maxBytesPerChar() != charsetEncoder.averageBytesPerChar()) {
+                throw new IllegalArgumentException("File that is encoded with a variable byte length encoding " +
+                        "(e.g. UTF-8) cannot be modified (can only have file access 'r as read-only').");
+            }
+        }
+        this.fileAccess = fileAccess;
     }
 
     /**
@@ -97,8 +111,45 @@ public class DbfFile {
      * @param filePath Full path to the file.
      * @param fileAccess read - "r", read/write - "rw"
      */
-    public DbfFile(String filePath, String fileAccess) {
-        initialize(filePath, fileAccess, Configuration.DEFAULT_ENCODING_NAME, true);
+    public DbfFile(String filePath, String fileAccess, boolean tryToReadCpg) throws IOException {
+        String cpgPath = null;
+
+        if (tryToReadCpg) {
+            // Check if CPG file exists in the same folder as the DBF file.
+            cpgPath = checkIfCpgExistsInSameFolder(filePath);
+        }
+
+        if (cpgPath == null) {
+            // CPG does not exist
+            initialize(filePath, fileAccess, Configuration.DEFAULT_ENCODING_NAME, true);
+        } else {
+            // CPG should be read and it exists
+            String encodingName = readCpg(cpgPath);
+
+            initialize(filePath, fileAccess, encodingName, false);
+        }
+
+    }
+
+    private String checkIfCpgExistsInSameFolder(String filePath) {
+        String cpgPath = null;
+
+        File dbfFile = new File(filePath);
+        String dirPath = dbfFile.getAbsoluteFile().getParentFile().getAbsolutePath();
+
+        String[] extensions = {"cpg"};
+        Collection<File> files = FileUtils.listFiles(new File(dirPath), extensions, false);
+
+        String dbfBaseName = FilenameUtils.getBaseName(filePath).toLowerCase();
+        for (File file : files) {
+            String fileBaseName = FilenameUtils.getBaseName(file.getPath()).toLowerCase();
+
+            if (dbfBaseName.equals(fileBaseName)) {
+                cpgPath = file.getAbsolutePath();
+            }
+        }
+
+        return cpgPath;
     }
 
     /**
@@ -110,6 +161,12 @@ public class DbfFile {
      */
     public DbfFile(String filePath, String fileAccess, String cpgFilePath) throws IOException {
         // Read cpg file
+        String encodingName = readCpg(cpgFilePath);
+
+        initialize(filePath, fileAccess, encodingName, false);
+    }
+
+    private String readCpg(String cpgFilePath) throws IOException {
         List<String> lines = Files.readAllLines(Paths.get(cpgFilePath), StandardCharsets.UTF_8);
         if (lines.size() == 0) {
             throw new IllegalArgumentException("CPG file is empty. File path: " + cpgFilePath);
@@ -117,7 +174,7 @@ public class DbfFile {
         // Encoding should be on the first line.
         String encodingName = lines.get(0);
 
-        initialize(filePath, fileAccess, encodingName, false);
+        return encodingName;
     }
 
     /**
@@ -131,7 +188,7 @@ public class DbfFile {
         isForwardOnly = false; // RandomAccessFile can seek TODO check if this is needed
         isReadOnly = (fileAccess.equals("r"));
 
-        dbfFile = new com.socialexplorer.fastDBF4j.util.FileReader(new RandomAccessFile(filePath, fileAccess)); // TODO move package
+        dbfFile = new FileReader(new RandomAccessFile(filePath, fileAccess)); // TODO move package
 
         // read the header
         try {
@@ -223,7 +280,7 @@ public class DbfFile {
                 fillRecord.setRecordIndex(recordsReadCount);
                 recordsReadCount++;
             } else {
-                fillRecord.setRecordIndex(((int) ((dbfFile.getFilePointer() - header.HeaderLength()) / header.getRecordLength())) - 1);
+                fillRecord.setRecordIndex(((int) ((dbfFile.getFilePointer() - header.headerLength()) / header.getRecordLength())) - 1);
             }
         }
 
@@ -279,7 +336,7 @@ public class DbfFile {
 
         // Move to the specified record, note that an exception will be thrown is stream is not seekable!
         // This is ok, since we provide a function to check whether the stream is seekable.
-        long seekToPosition = header.HeaderLength() + (index * header.getRecordLength());
+        long seekToPosition = header.headerLength() + (index * header.getRecordLength());
 
         // check whether requested record exists. Subtract 1 from file length (there is a terminating character 1A at the end of the file)
         // so if we hit end of file, there are no more records, so return false;
@@ -334,7 +391,7 @@ public class DbfFile {
 
         // move to the specified record, note that an exception will be thrown is stream is not seekable!
         // This is ok, since we provide a function to check whether the stream is seekable.
-        long nSeekToPosition = header.HeaderLength() + (rowIndex * header.getRecordLength()) + column.getDataAddress();
+        long nSeekToPosition = header.headerLength() + (rowIndex * header.getRecordLength()) + column.getDataAddress();
 
         // check whether requested record exists. Subtract 1 from file length (there is a terminating character 1A at the end of the file)
         // so if we hit end of file, there are no more records, so return false;
@@ -361,6 +418,10 @@ public class DbfFile {
      * @throws IOException If an I/O error occurs.
      */
     public void write(DbfRecord record) throws IOException {
+        if (isReadOnly()) {
+            throw new UnsupportedOperationException("Trying to write to a read-only file.");
+        }
+
         // if header was never written, write it first, then output the record
         if (!headerWritten) {
             writeHeader();
@@ -372,7 +433,7 @@ public class DbfFile {
                 /* Calculate number of records in file. Do not rely on header's RecordCount property since client can change that value.
                    Also note that some DBF files do not have ending 0x1A byte, so we subtract 1 and round off,
                    instead of just cast since cast would just drop decimals. */
-                int nNumRecords = (int) Math.round(((double) (dbfFile.length() - header.HeaderLength() - 1) / header.getRecordLength()));
+                int nNumRecords = (int) Math.round(((double) (dbfFile.length() - header.headerLength() - 1) / header.getRecordLength()));
 
                 if (nNumRecords < 0) {
                     nNumRecords = 0;
@@ -400,6 +461,10 @@ public class DbfFile {
      * @throws IOException If an I/O error occurs.
      */
     public void write(DbfRecord record, boolean clearRecordAfterWrite) throws IOException {
+        if (isReadOnly()) {
+            throw new UnsupportedOperationException("Trying to write to a read-only file.");
+        }
+
         write(record);
 
         if (clearRecordAfterWrite) {
@@ -420,6 +485,10 @@ public class DbfFile {
      * @throws IOException IOException if an I/O error occurs while reading the file.
      */
     public void update(DbfRecord record) throws IOException {
+        if (isReadOnly()) {
+            throw new UnsupportedOperationException("Trying to write to a read-only file.");
+        }
+
         // if header was never written, write it first, then output the record
         if (!headerWritten) {
             writeHeader();
@@ -447,7 +516,7 @@ public class DbfFile {
 
         // Move to the specified record, note that an exception will be thrown if stream is not seekable!
         // This is ok, since we provide a function to check whether the stream is seekable.
-        long nSeekToPosition = (long) header.HeaderLength() + ((long) record.getRecordIndex() * (long) header.getRecordLength());
+        long nSeekToPosition = (long) header.headerLength() + ((long) record.getRecordIndex() * (long) header.getRecordLength());
 
         //check whether we can seek to this position. Subtract 1 from file length (there is a terminating character 1A at the end of the file)
         //so if we hit end of file, there are no more records, so return false;
@@ -469,6 +538,10 @@ public class DbfFile {
      * @throws IOException IOException if an I/O error occurs while reading the file.
      */
     public boolean writeHeader() throws IOException {
+        if (isReadOnly()) {
+            throw new UnsupportedOperationException("Trying to write to a read-only file.");
+        }
+
         //update header if possible
         //--------------------------------
         if (dbfFile != null) {
