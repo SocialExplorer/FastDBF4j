@@ -21,11 +21,6 @@ import java.util.List;
  * Also, this class supports reading/writing from/to an internet forward only type of stream!
  * TODO: add end of file byte '0x1A' !!!
  * We don't rely on that byte at all, and everything works with or without that byte, but it should be there by spec.
- *
- * TODO Forbid file editing if the encoding is UTF-8 since column width is variable in that case.
- * It would be a pain in the ass to modify the header to fix column size. Also all values after
- * that column would have to be shifted in case a more-than-one byte character appears..
-
  */
 public class DbfFile {
     /**
@@ -102,6 +97,7 @@ public class DbfFile {
             }
         }
         this.fileAccess = fileAccess;
+        isReadOnly = (fileAccess.equals("r"));
     }
 
     /**
@@ -186,9 +182,8 @@ public class DbfFile {
         recordsReadCount = 0; // reset position
         headerWritten = false; // assume the header is not written
         isForwardOnly = false; // RandomAccessFile can seek TODO check if this is needed
-        isReadOnly = (fileAccess.equals("r"));
 
-        dbfFile = new FileReader(new RandomAccessFile(filePath, fileAccess)); // TODO move package
+        dbfFile = new FileReader(new RandomAccessFile(filePath, fileAccess));
 
         // read the header
         try {
