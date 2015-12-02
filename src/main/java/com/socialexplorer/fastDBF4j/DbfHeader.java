@@ -176,7 +176,10 @@ public class DbfHeader {
      */
     private byte languageDriverId;
 
-    public DbfHeader() {
+    private Configuration configuration;
+
+
+    public DbfHeader(Configuration configuration) {
         // create a list of fields of default size
         fields = new ArrayList<DbfColumn>();
 
@@ -185,6 +188,7 @@ public class DbfHeader {
         cal.set(Calendar.MONTH, 1);
         cal.set(Calendar.DAY_OF_MONTH, 1);
         updateDate = cal.getTime();
+        this.configuration = configuration;
     }
 
     /**
@@ -192,8 +196,9 @@ public class DbfHeader {
      *
      * @param fieldCapacity initial column capacity
      */
-    public DbfHeader(int fieldCapacity) {
+    public DbfHeader(int fieldCapacity, Configuration configuration) {
         fields = new ArrayList<DbfColumn>(fieldCapacity);
+        this.configuration = configuration;
     }
 
     /**
@@ -359,7 +364,7 @@ public class DbfHeader {
     protected byte[] getEmptyDataRecord() throws UnsupportedEncodingException {
         if (emptyRecord == null) { // create lazily
             String value = String.format("%1$" + recordLength + "s", " ");
-            emptyRecord = value.getBytes(Configuration.getEncodingName());
+            emptyRecord = value.getBytes(configuration.getEncodingName());
         }
 
         return emptyRecord;
@@ -569,7 +574,7 @@ public class DbfHeader {
              * read the field name.
              * field name: 10 8-bit characters, ASCII (terminated by 00h)
              */
-            String sFieldName = dbfFile.readChars(11, Configuration.getEncodingName());
+            String sFieldName = dbfFile.readChars(11, configuration.getEncodingName());
 
             // read the field type
             byte fieldType = dbfFile.readByte();
@@ -644,9 +649,13 @@ public class DbfHeader {
      */
     private void tryToSetEncoding() {
         String encoding = DbfEncodings.getCodePageFromLanguageId(languageDriverId);
-        if (encoding != null && Charset.isSupported(encoding) && Configuration.getShouldTryToSetEncodingFromLanguageDriver()) {
-            Configuration.setEncodingName(encoding);
+        if (encoding != null && Charset.isSupported(encoding) && configuration.getShouldTryToSetEncodingFromLanguageDriver()) {
+            configuration.setEncodingName(encoding);
         } // leave default value otherwise
+    }
+
+    public Configuration getConfiguration() {
+        return configuration;
     }
 }
 

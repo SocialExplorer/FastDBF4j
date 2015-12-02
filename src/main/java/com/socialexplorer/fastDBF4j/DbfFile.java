@@ -26,7 +26,7 @@ public class DbfFile {
     /**
      * Header object that helps read/write dbf file header information.
      */
-    protected DbfHeader header = new DbfHeader();
+    protected DbfHeader header;
     /**
      * Flag that indicates whether the header was written or not.
      */
@@ -60,6 +60,8 @@ public class DbfFile {
      */
     protected String fileAccess = "";
 
+    private Configuration configuration;
+
     /**
      * Initialize DBF file.
      * @param filePath Path to the file.
@@ -75,12 +77,13 @@ public class DbfFile {
     private void initialize(String filePath, String fileAccess, String encodingName, boolean shouldTryToSetEncodingFromLanguageDriver) {
         this.filePath = filePath;
 
-        Configuration.setShouldTryToSetEncodingFromLanguageDriver(shouldTryToSetEncodingFromLanguageDriver);
+        configuration = new Configuration();
+        configuration.setShouldTryToSetEncodingFromLanguageDriver(shouldTryToSetEncodingFromLanguageDriver);
 
         if (!Charset.isSupported(encodingName)) {
             throw new UnsupportedCharsetException("Encoding :" + encodingName + " not supported!");
         }
-        Configuration.setEncodingName(encodingName);
+        configuration.setEncodingName(encodingName);
 
         if (!(fileAccess.equals("r") || fileAccess.equals("rw"))) {
             throw new IllegalArgumentException("File access must be either 'r' or 'rw'");
@@ -91,13 +94,15 @@ public class DbfFile {
             // Forbid editing of this file since the byte length of each encoded character is variable (e.g. UTF-8)
             // and editing a record could mess up the DBF if record size changes (if it contains more bytes due to editing).
             // This feature could be supported in the future, but for now simply forbid editing. TODO
-            if (charsetEncoder.maxBytesPerChar() != charsetEncoder.averageBytesPerChar()) {
+            /*if (charsetEncoder.maxBytesPerChar() != charsetEncoder.averageBytesPerChar()) {
                 throw new IllegalArgumentException("File that is encoded with a variable byte length encoding " +
                         "(e.g. UTF-8) cannot be modified (can only have file access 'r as read-only').");
-            }
+            }*/
         }
         this.fileAccess = fileAccess;
         isReadOnly = (fileAccess.equals("r"));
+
+        header = new DbfHeader(configuration);
     }
 
     /**
@@ -191,7 +196,7 @@ public class DbfFile {
             headerWritten = true;
         } catch (EOFException e) {
             // could not read the header because file is empty
-            header = new DbfHeader();
+            header = new DbfHeader(configuration);
             headerWritten = false;
         }
     }
@@ -208,7 +213,7 @@ public class DbfFile {
         }
 
         // Create an empty header.
-        header = new DbfHeader();
+        header = new DbfHeader(configuration);
         headerWritten = false;
 
         // Reset current record index.
@@ -400,7 +405,7 @@ public class DbfFile {
         byte[] data = new byte[column.getLength()];
         dbfFile.read(data, 0, column.getLength());
 
-        result.append(new String(data, 0, column.getLength(), Configuration.getEncodingName()));
+        result.append(new String(data, 0, column.getLength(), configuration.getEncodingName()));
 
         return true;
     }

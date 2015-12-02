@@ -9,25 +9,25 @@ public class Configuration {
     /**
      * Encoding name that is used.
      */
-    private static String encodingName;
+    private String encodingName;
     /**
      * True if encoding is provided by the user (should be forced). False if it should be read from dbf.
      */
-    private static Boolean shouldTryToSetEncodingFromLanguageDriver;
+    private Boolean shouldTryToSetEncodingFromLanguageDriver;
 
-    public static String getEncodingName() {
+    public String getEncodingName() {
         return encodingName;
     }
 
-    public static void setEncodingName(String encodingName) {
-        Configuration.encodingName = encodingName;
+    public void setEncodingName(String encodingName) {
+        this.encodingName = encodingName;
     }
 
-    public static Boolean getShouldTryToSetEncodingFromLanguageDriver() {
+    public Boolean getShouldTryToSetEncodingFromLanguageDriver() {
         return shouldTryToSetEncodingFromLanguageDriver;
     }
 
-    public static void setShouldTryToSetEncodingFromLanguageDriver(Boolean shouldTryToSetEncodingFromLanguageDriver) {
-        Configuration.shouldTryToSetEncodingFromLanguageDriver = shouldTryToSetEncodingFromLanguageDriver;
+    public void setShouldTryToSetEncodingFromLanguageDriver(Boolean shouldTryToSetEncodingFromLanguageDriver) {
+        this.shouldTryToSetEncodingFromLanguageDriver = shouldTryToSetEncodingFromLanguageDriver;
     }
 }

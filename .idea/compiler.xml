@@ -26,6 +26,8 @@
         <module name="fastdbf4j" />
       </profile>
     </annotationProcessing>
+    <bytecodeTargetLevel>
+      <module name="FastDBF4j" target="1.5" />
+    </bytecodeTargetLevel>
   </component>
 </project>
-

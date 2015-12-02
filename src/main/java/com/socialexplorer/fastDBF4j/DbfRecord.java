@@ -120,7 +120,9 @@ public class DbfRecord {
              * -----------------------
              */
             if (columnType == DbfColumn.DbfColumnType.CHARACTER) {
-                if (!allowStringTruncate && value.length() > column.getLength()) {
+                int valueByteLength = value.getBytes(header.getConfiguration().getEncodingName()).length;
+
+                if (!allowStringTruncate && valueByteLength > column.getLength()) {
                     throw new DbfDataTruncateException("Value exceeds column length. String truncation would occur " +
                             "and AllowStringTruncate flag is set to false. " +
                             "To suppress this exception change AllowStringTruncate to true.");
@@ -129,10 +131,10 @@ public class DbfRecord {
                 // First clear the previous value, then set the new one.
                 System.arraycopy(emptyRecord, column.getDataAddress(), data, column.getDataAddress(), column.getLength());
 
-                int length = value.length() > column.getLength() ? column.getLength() : value.length();
-                byte[] valueBytes = value.substring(0, length).getBytes(Configuration.getEncodingName());
+                int trimmedValueLength = valueByteLength > column.getLength() ? column.getLength() : valueByteLength;
+                byte[] valueBytes = value.getBytes(header.getConfiguration().getEncodingName());
 
-                System.arraycopy(valueBytes, 0, data, column.getDataAddress(), valueBytes.length);
+                System.arraycopy(valueBytes, 0, data, column.getDataAddress(), trimmedValueLength);
             }
             /**
              * -----------------------
@@ -161,7 +163,7 @@ public class DbfRecord {
                     //set integer part, CAREFUL not to overflow buffer! (truncate instead)
                     //-----------------------------------------------------------------------
                     int nNumLen = value.length() > column.getLength() ? column.getLength() : value.length();
-                    byte[] valueBytes = value.substring(0, nNumLen).getBytes(Configuration.getEncodingName());
+                    byte[] valueBytes = value.substring(0, nNumLen).getBytes(header.getConfiguration().getEncodingName());
 
                     System.arraycopy(valueBytes, 0, data, (column.getDataAddress() + column.getLength() - nNumLen), valueBytes.length);
                 } else {
@@ -200,14 +202,14 @@ public class DbfRecord {
                     //set decimal numbers, CAREFUL not to overflow buffer! (truncate instead)
                     if (indexDecimal > -1) {
                         int decimalLength = cDec.length > column.getDecimalCount() ? column.getDecimalCount() : cDec.length;
-                        byte[] valueBytes = value.substring(value.indexOf('.') + 1, value.indexOf('.') + decimalLength + 1).getBytes(Configuration.getEncodingName());
+                        byte[] valueBytes = value.substring(value.indexOf('.') + 1, value.indexOf('.') + decimalLength + 1).getBytes(header.getConfiguration().getEncodingName());
                         System.arraycopy(valueBytes, 0, data, (column.getDataAddress() + column.getLength() - column.getDecimalCount()), valueBytes.length);
                     }
 
                     //set integer part, CAREFUL not to overflow buffer! (truncate instead)
                     //-----------------------------------------------------------------------
                     int nNumLen = cNum.length > column.getLength() - column.getDecimalCount() - 1 ? (column.getLength() - column.getDecimalCount() - 1) : cNum.length;
-                    byte[] valueBytes = value.substring(0, nNumLen).getBytes(Configuration.getEncodingName());
+                    byte[] valueBytes = value.substring(0, nNumLen).getBytes(header.getConfiguration().getEncodingName());
                     System.arraycopy(valueBytes, 0, data, (column.getDataAddress() + column.getLength() - column.getDecimalCount() - nNumLen - 1), valueBytes.length);
 
                     //set decimal point
@@ -304,7 +306,7 @@ public class DbfRecord {
 
             val = Integer.toString(ByteUtils.swap(ByteUtils.byte2int(intBytes))); // swap to get big endian
         } else {
-            val = new String(data, column.getDataAddress(), column.getLength(), Configuration.getEncodingName());
+            val = new String(data, column.getDataAddress(), column.getLength(), header.getConfiguration().getEncodingName());
         }
         return val;
     }
@@ -321,7 +323,7 @@ public class DbfRecord {
         DbfColumn column = header.get(columnIndex);
 
         if (column.getColumnType() == DbfColumn.DbfColumnType.DATE) {
-            String sDateVal = new String(data, column.getDataAddress(), column.getLength(), Configuration.getEncodingName());
+            String sDateVal = new String(data, column.getDataAddress(), column.getLength(), header.getConfiguration().getEncodingName());
             SimpleDateFormat format = new SimpleDateFormat("yyyyMMdd");
             return format.parse(sDateVal);
         } else {
@@ -343,7 +345,7 @@ public class DbfRecord {
         if (columnType == DbfColumn.DbfColumnType.DATE) {
             // Format date and set value. Date format is: yyyyMMdd
             String formattedValue = (new SimpleDateFormat("yyyyMMdd")).format(value);
-            byte[] bytes = formattedValue.substring(0, column.getLength()).getBytes(Configuration.getEncodingName());
+            byte[] bytes = formattedValue.substring(0, column.getLength()).getBytes(header.getConfiguration().getEncodingName());
 
             System.arraycopy(bytes, 0, data, column.getDataAddress(), bytes.length);
         } else {
@@ -366,7 +368,7 @@ public class DbfRecord {
      */
     public String toString() {
         try {
-            return new String(data, Configuration.getEncodingName());
+            return new String(data, header.getConfiguration().getEncodingName());
         } catch(UnsupportedEncodingException e) {
             throw new RuntimeException(e);
         }
@@ -532,7 +534,7 @@ public class DbfRecord {
      */
     protected String readValue(int columnIndex) throws UnsupportedEncodingException {
         DbfColumn column = header.get(columnIndex);
-        return new String(data, column.getDataAddress(), column.getLength(), Configuration.getEncodingName());
+        return new String(data, column.getDataAddress(), column.getLength(), header.getConfiguration().getEncodingName());
     }
 
     public void setData(byte[] data) {
