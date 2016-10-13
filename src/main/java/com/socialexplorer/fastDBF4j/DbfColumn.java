@@ -23,6 +23,7 @@ public class DbfColumn implements Cloneable {
      Y 	Currency 	(FoxPro)
      T 	DateTime 	(FoxPro)
      I 	Integer 	Length: 4 byte little endian integer 	(FoxPro)
+     F 	Float       Number stored as a string, right justified, and padded with blanks to the width of the field.
     */
 
     //  Great information on DBF located here:
@@ -74,7 +75,11 @@ public class DbfColumn implements Cloneable {
         /**
          * I 	Integer 	Length: 4 byte little endian integer 	(FoxPro)
          */
-        INTEGER(6, 'I');
+        INTEGER(6, 'I'),
+        /**
+         * F 	Float       Number stored as a string, right justified, and padded with blanks to the width of the field.
+         */
+        FLOAT(7, 'F');
 
         private int code;
         private char c;

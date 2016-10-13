@@ -28,9 +28,13 @@ public class RunDbfReader {
 
 
     private static void readRecord() throws IOException, InvalidDbfFileException {
-        String path = "...";
+        String path = "/home/emir/Downloads/BIH_adm/BIH_adm0.dbf";
         DbfFile dbfReader = new DbfFile(path, "r", true);
         dbfReader.open();
+
+        for (int i = 0; i < dbfReader.getHeader().getColumnCount(); i++) {
+            System.out.println(dbfReader.getHeader().get(i).getName());
+        }
 
         DbfRecord dbfRecord;
         while ((dbfRecord = dbfReader.readNext()) != null) {
