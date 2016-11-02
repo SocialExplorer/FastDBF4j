@@ -125,7 +125,17 @@ public class DbfFile {
             initialize(filePath, fileAccess, Configuration.DEFAULT_ENCODING_NAME, true);
         } else {
             // CPG should be read and it exists
-            String encodingName = readCpg(cpgPath);
+            String encodingName;
+            try {
+                encodingName = readCpg(cpgPath);
+                if (!Charset.isSupported(encodingName)) {
+                    // on unsupported encoding provided in cpg, use default encoding
+                    encodingName = Configuration.DEFAULT_ENCODING_NAME;
+                }
+            } catch (Exception e) {
+                // on error reading cpg, use default encoding
+                encodingName = Configuration.DEFAULT_ENCODING_NAME;
+            }
 
             initialize(filePath, fileAccess, encodingName, false);
         }
