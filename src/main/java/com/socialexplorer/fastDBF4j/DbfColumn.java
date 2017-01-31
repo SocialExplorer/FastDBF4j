@@ -84,6 +84,24 @@ public class DbfColumn implements Cloneable {
         private int code;
         private char c;
 
+        /**
+         * Value that will be written to DBF when setting null value,
+         * and that will be read as null when found in DBF.
+         */
+        private String nullValue = null;
+
+        public void setNullValue(String nullValue) {
+            this.nullValue = nullValue;
+        }
+
+        public String getNullValue() {
+            return this.nullValue;
+        }
+
+        public boolean isNullValue(String value) {
+            return this.nullValue.equals(value.trim());
+        }
+
         private DbfColumnType(int code, char c) {
             this.code = code;
             this.c = c;

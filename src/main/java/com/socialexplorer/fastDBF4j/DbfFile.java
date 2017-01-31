@@ -142,6 +142,22 @@ public class DbfFile {
 
     }
 
+    public void setNumberNullValue(String numberNullValue) {
+        DbfColumn.DbfColumnType.NUMBER.setNullValue(numberNullValue);
+    }
+
+    public void setDateNullValue(String dateNullValue) {
+        DbfColumn.DbfColumnType.DATE.setNullValue(dateNullValue);
+    }
+
+    public void setBooleanNullValue(String booleanNullValue) {
+        DbfColumn.DbfColumnType.BOOLEAN.setNullValue(booleanNullValue);
+    }
+
+    public void setStringNullValue(String stringNullValue) {
+        DbfColumn.DbfColumnType.CHARACTER.setNullValue(stringNullValue);
+    }
+
     private String checkIfCpgExistsInSameFolder(String filePath) {
         String cpgPath = null;
 

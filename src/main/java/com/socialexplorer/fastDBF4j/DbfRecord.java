@@ -103,7 +103,21 @@ public class DbfRecord {
 
         // if an empty value is passed, we just clear the data, and leave it blank.
         // note: tests have shown that testing for null and checking length is faster than comparing to "" empty str :)
-        if (value == null || value.length() == 0) {
+        if (value == null) {
+            String nullValue = columnType.getNullValue();
+            if (nullValue == null) {
+                System.arraycopy(emptyRecord, column.getDataAddress(), data, column.getDataAddress(), column.getLength());
+            } else {
+                byte[] valueBytes = nullValue.getBytes(header.getConfiguration().getEncodingName());
+
+                if (valueBytes.length > column.getLength()) {
+                    throw new DbfDataTruncateException("Trying to write null value as: " + nullValue + " but it exceeds column length.");
+                }
+                // First clear the previous value, then set the new one.
+                System.arraycopy(emptyRecord, column.getDataAddress(), data, column.getDataAddress(), column.getLength());
+                System.arraycopy(valueBytes, 0, data, column.getDataAddress(), valueBytes.length);
+            }
+        } else if (value.length() == 0) {
             // This is like NULL data, set it to empty. I looked at SAS DBF output when a null value exists
             // and empty data are output. we get the same result, so this looks good.
             System.arraycopy(emptyRecord, column.getDataAddress(), data, column.getDataAddress(), column.getLength());
@@ -307,7 +321,10 @@ public class DbfRecord {
             val = Integer.toString(ByteUtils.swap(ByteUtils.byte2int(intBytes))); // swap to get big endian
         } else {
             val = new String(data, column.getDataAddress(), column.getLength(), header.getConfiguration().getEncodingName());
+
+            if (column.getColumnType().isNullValue(val)) val = "";
         }
+
         return val;
     }
 
