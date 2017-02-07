@@ -39,25 +39,24 @@ public class DbfColumn implements Cloneable {
          */
         CHARACTER(0, 'C'),
         /**
-         *
          * Number 	Length: less than 18
          * ASCII text up till 18 characters long (include sign and decimal point).
          * Valid characters:
-         *      "0" - "9" and "-". Number fields can be up to 20 characters long in FoxPro and Clipper.         *
+         * "0" - "9" and "-". Number fields can be up to 20 characters long in FoxPro and Clipper.         *
          * We are not enforcing this 18 char limit.
          */
         NUMBER(1, 'N'),
         /**
          * L  Logical  Length: 1    Boolean/byte (8 bit)
-         *
+         * <p>
          * Legal values:
-         *  	Not initialized (default)
-         *  	Y,y 	Yes
-         *  	N,n 	No
-         *  	F,f 	False
-         *  	T,t 	True
-         *  	Logical fields are always displayed using T/F/?. Some sources claims
-         *  	that space (ASCII 20h) is valid for not initialised. Space may occur, but is not defined.
+         * Not initialized (default)
+         * Y,y 	Yes
+         * N,n 	No
+         * F,f 	False
+         * T,t 	True
+         * Logical fields are always displayed using T/F/?. Some sources claims
+         * that space (ASCII 20h) is valid for not initialised. Space may occur, but is not defined.
          */
         BOOLEAN(2, 'L'),
         /**
@@ -99,7 +98,7 @@ public class DbfColumn implements Cloneable {
         }
 
         public boolean isNullValue(String value) {
-            return value == null || this.nullValue.equals(value.trim());
+            return this.nullValue != null && this.nullValue.equals(value.trim());
         }
 
         private DbfColumnType(int code, char c) {
@@ -116,6 +115,7 @@ public class DbfColumn implements Cloneable {
         }
 
         private static Map<Character, DbfColumnType> dbfColumnCharMap = new HashMap();
+
         static {
             for (DbfColumnType dbfColumnType : EnumSet.allOf(DbfColumnType.class)) {
                 dbfColumnCharMap.put(dbfColumnType.getChar(), dbfColumnType);
@@ -158,7 +158,7 @@ public class DbfColumn implements Cloneable {
      * @param type
      * @param length
      * @param decimalPlaces
-     * @exception  IllegalArgumentException If the given arguments are invalid.
+     * @exception IllegalArgumentException If the given arguments are invalid.
      */
     public DbfColumn(String name, DbfColumnType type, int length, int decimalPlaces) {
         setName(name);
@@ -167,8 +167,7 @@ public class DbfColumn implements Cloneable {
 
         if (type == DbfColumnType.NUMBER) {
             decimalCount = decimalPlaces;
-        }
-        else {
+        } else {
             decimalCount = 0;
         }
 
@@ -220,7 +219,7 @@ public class DbfColumn implements Cloneable {
     }
 
     public DbfColumn(String name, DbfColumnType type) {
-        this(name,type,0,0);
+        this(name, type, 0, 0);
 
         if (type == DbfColumnType.NUMBER || type == DbfColumnType.CHARACTER)
             throw new IllegalArgumentException("For number and character field types you must specify Length and Decimal Precision.");
@@ -235,9 +234,9 @@ public class DbfColumn implements Cloneable {
 
     /**
      * @param value
-     * @exception IllegalArgumentException If the field name is null, empty, or larger than 11 character.
+     * @throws IllegalArgumentException If the field name is null, empty, or larger than 11 character.
      */
-    public void setName(String value)  {
+    public void setName(String value) {
         if (value == null || value.equals("")) {
             throw new IllegalArgumentException("Field names must be at least one char long and cannot be null.");
         }
@@ -300,7 +299,7 @@ public class DbfColumn implements Cloneable {
     public static DbfColumnType getDbaseType(Type type) {
         if (type.getClass() == String.class.getClass())
             return DbfColumnType.CHARACTER;
-        else if (type.getClass() == double.class.getClass()||type.getClass() == float.class.getClass())
+        else if (type.getClass() == double.class.getClass() || type.getClass() == float.class.getClass())
             return DbfColumnType.NUMBER;
         else if (type.getClass() == boolean.class.getClass())
             return DbfColumnType.BOOLEAN;
@@ -312,9 +311,10 @@ public class DbfColumn implements Cloneable {
 
     /**
      * Get dbase column type for character.
+     *
      * @param c
      * @return Dbf column type
-     * @exception IllegalArgumentException If the given character does not have a corresponding dbase type.
+     * @throws IllegalArgumentException If the given character does not have a corresponding dbase type.
      */
     public static DbfColumnType getDbaseType(char c) {
         String value = Character.toString(c).toUpperCase();
@@ -322,7 +322,7 @@ public class DbfColumn implements Cloneable {
         DbfColumnType dbfColumnType = DbfColumnType.getTypeFromChar(chars[0]);
 
         if (dbfColumnType == null) {
-            throw new IllegalArgumentException(c+" does not have a corresponding dbase type.");
+            throw new IllegalArgumentException(c + " does not have a corresponding dbase type.");
         }
 
         return dbfColumnType;
