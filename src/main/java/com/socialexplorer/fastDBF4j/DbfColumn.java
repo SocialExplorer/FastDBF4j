@@ -99,7 +99,7 @@ public class DbfColumn implements Cloneable {
         }
 
         public boolean isNullValue(String value) {
-            return this.nullValue.equals(value.trim());
+            return value == null || this.nullValue.equals(value.trim());
         }
 
         private DbfColumnType(int code, char c) {
