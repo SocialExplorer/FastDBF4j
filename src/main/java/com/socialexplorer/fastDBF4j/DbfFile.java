@@ -562,6 +562,7 @@ public class DbfFile {
      * automatically and updated when you close the file (if it has changed).
      * @return true if the header has been written successfully, false otherwise
      * @throws IOException IOException if an I/O error occurs while reading the file.
+     * @throws IllegalArgumentException If column name in selected encoding takes more than 10 bytes
      */
     public boolean writeHeader() throws IOException {
         if (isReadOnly()) {

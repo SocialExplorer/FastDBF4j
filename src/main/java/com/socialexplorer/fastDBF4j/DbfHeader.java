@@ -443,6 +443,7 @@ public class DbfHeader {
      *
      * @param dbfFileWriter DBF file writer.
      * @throws IOException  if an I/O error occurs.
+     * @throws IllegalArgumentException If column name in selected encoding takes more than 10 bytes
      */
     public void write(FileReader dbfFileWriter) throws IOException {
         // write the header
@@ -476,14 +477,17 @@ public class DbfHeader {
         // write all of the header records
         byte[] byteReserved = new byte[14];  // these are initialized to 0 by default.
         for (int i = 0; i < fields.size(); i++) {
-            int padValue = 11;
-            String value = String.format("%1$-" + padValue + "s", "0");
-            value += fields.get(i).getName();
-            // field name length is up to 10 characters, and is terminated with a NULL character
-            char[] fieldNamePadded = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
-            char[] fieldNameNoPadding = value.substring(value.length() - fields.get(i).getName().length()).toCharArray();
-            System.arraycopy(fieldNameNoPadding, 0, fieldNamePadded, 0, fieldNameNoPadding.length);
-            dbfFileWriter.write8bitChars(fieldNamePadded);
+
+            String fieldName = fields.get(i).getName();
+            byte[] fieldNameBytes = fieldName.getBytes(configuration.getEncodingName());
+            if (fieldNameBytes.length > 10) {
+                throw new IllegalArgumentException("Field `" + fieldName + "` in encoding `" + configuration.getEncodingName() + "` would take more than 10 bytes");
+            }
+
+            // field name length is up to 10 bytes, and is terminated with a NULL character
+            byte[] fieldNamePadded = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
+            System.arraycopy(fieldNameBytes, 0, fieldNamePadded, 0, fieldNameBytes.length);
+            dbfFileWriter.write(fieldNamePadded);
 
             // write the field type
             dbfFileWriter.write8bitChar(fields.get(i).getColumnTypeChar());
