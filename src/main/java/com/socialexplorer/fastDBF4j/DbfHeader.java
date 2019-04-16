@@ -1,5 +1,6 @@
 package com.socialexplorer.fastDBF4j;
 
+import com.socialexplorer.fastDBF4j.exceptions.CorruptedHeaderNegativeRecordLengthException;
 import com.socialexplorer.fastDBF4j.exceptions.InvalidDbfFileException;
 import com.socialexplorer.fastDBF4j.util.ByteUtils;
 import com.socialexplorer.fastDBF4j.util.Configuration;
@@ -554,6 +555,9 @@ public class DbfHeader {
 
         // Length of a record
         recordLength = dbfFile.readLittleEndianShort();
+        if (recordLength < 0) {
+            throw new CorruptedHeaderNegativeRecordLengthException(recordLength);
+        }
 
         // Skip everything till the language driver ID.
         dbfFile.skipBytes(17);
